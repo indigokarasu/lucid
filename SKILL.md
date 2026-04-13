@@ -1,33 +1,48 @@
 ---
 name: ocas-lucid
 description: >
-  Schedules a nightly (3am) dream loop to review session interactions and intelligently decide what new information should be stored in MemPalace and Chronicle. Uses a dual-phase process (Fresh Scan and Weak Signal Recirculation) to ensure that evolving context promotes weak signals into strong memory over time. Runs via background=true to avoid timeout on long-running analysis.
+  Nightly journal curator. Batch-processes OCAS skill journals into MemPalace's
+  verbatim store via MCP tools. Runs as a scheduled cron job at 3am, classifying
+  each journal for filing as a MemPalace drawer, MemPalace KG triple, Elephas
+  Signal, or skip. Features re-emergence detection, two-pass stale handling,
+  change magnitude gates, hibernation protection, and incremental cursor-based
+  resumption. Use when: dream, lucid, nightly curation, journal consolidation,
+  MemPalace filing, memory consolidation.
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "1.0.0"
+  version: "2.0.0"
   hermes:
     tags: [memory, ingestion, dream-loop]
-    category: evolution
+    category: memory
     cron:
       - name: "lucid:dream"
         schedule: "0 3 * * *"
         command: "lucid.dream"
+      - name: "lucid:update"
+        schedule: "0 0 * * *"
+        command: "lucid.update"
   openclaw:
     skill_type: system
     visibility: public
     filesystem:
       read:
         - "{agent_root}/commons/journals/"
+        - "{agent_root}/commons/data/ocas-lucid/"
         - "{agent_root}/commons/journals/ocas-lucid/"
       write:
-        - "{agent_root}/commons/journals/ocas-lucid/"
         - "{agent_root}/commons/data/ocas-lucid/"
+        - "{agent_root}/commons/journals/ocas-lucid/"
     self_update:
       source: "https://github.com/indigokarasu/lucid"
       mechanism: "version-checked tarball from GitHub via gh CLI"
       command: "lucid.update"
-      requires_binaries: [gh, tar, python3]
+      requires_binaries: [gh, tar]
+    requires:
+      mcp:
+        - name: "mempalace"
+          description: "MemPalace MCP server for verbatim drawer storage and knowledge graph operations"
+          required: true
     cron:
       - name: "lucid:dream"
         schedule: "0 3 * * *"
@@ -39,164 +54,221 @@ metadata:
 
 # Lucid
 
-Lucid is the system's nocturnal curatorial engine — a nightly dream loop that reviews the day's interactions across all skills and journals, then intelligently decides what new information deserves to be stored in MemPalace (documented detail) and Chronicle (atomic facts and relationships).
-
-By running as a background process (`background=true` with `notify_on_complete=true`), Lucid avoids terminal timeouts on long-running analysis across thousands of journal entries.
-
-Lucid does not block or interfere with daytime operations — it operates in complete isolation, consuming only read access to journals, and produces journal entries documenting its decisions.
-
----
+Nightly journal curator. Batch-processes journals from all OCAS skills into MemPalace's verbatim semantic store. Structured facts worth promoting to Chronicle are emitted as Signals to Elephas via the journal signal payload -- Lucid never writes to Chronicle or Weave directly.
 
 ## When to use
 
-- Review daily interactions for MemPalace/Chronicle ingestion candidates
-- Identify patterns, decisions, or relationships missed during real-time tool usage
-- Automate the "curator" role: filter noise, extract signal, route to correct storage
-- Create "tunnels" between wings/rooms by linking related entities across domains
-
----
+- Scheduled nightly cron at 3am (primary mode)
+- Manual invocation via `lucid.dream` for immediate processing
+- `lucid.status` to check last run, pending journals, filing stats
 
 ## When not to use
 
-- Web research or user queries — use Sift or other context-aware skills
-- Real-time memory filing — this is for batch, reflective ingestion
-- Skill building or improvement — use Forge and Mentor
-
----
+- Real-time memory filing during active sessions
+- Skill evaluation or improvement proposals (Mentor)
+- Behavioral pattern detection (Corvus)
+- Entity identity resolution (Elephas)
 
 ## Responsibility boundary
 
-Lucid owns:
+Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG), relevance classification, weak signal recirculation, re-emergence detection.
 
-- Daily ingestion candidate discovery across all skill journals
-- Intelligent routing decisions (MemPalace drawer vs Chronicle triple)
-- Automatic filing via MCP tools or skill invocation
-- Journal logging of ingestion decisions
+Lucid does not own: Chronicle writes (Elephas only), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
 
-Lucid does not own:
+Adjacent boundaries: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Mentor also reads journals but for OKR evaluation. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace.
 
-- Real-time tool call routing — this happens during active sessions
-- Skill evaluation or improvement proposals — this is Mentor's domain
-- Behavioral pattern detection — this is Corvus's domain
+## Optional skill cooperation
 
----
+- **Elephas**: Lucid queries Chronicle via `elephas.query` to check if an entity already exists before emitting a Signal. If Elephas is unavailable, Lucid emits the Signal anyway (Elephas deduplicates on ingestion).
+- **MemPalace**: Required. Lucid uses MemPalace MCP tools for all filing operations. If MemPalace is unavailable, Lucid logs failures and skips filing for that run.
+
+## Commands
+
+- `lucid.dream` -- run the full dream cycle immediately, ignoring the time gate
+- `lucid.status` -- last run timestamp, journals pending, cumulative filing stats, streak count
+- `lucid.init` -- create storage directories, initialize config and logs, register cron jobs
+- `lucid.update` -- pull latest from GitHub source; preserves journals and data
 
 ## Storage layout
 
 ```
+{agent_root}/commons/data/ocas-lucid/
+  config.json
+  ingestion_log.jsonl
+  decisions.jsonl
+  recirculation_queue.jsonl
+  removed_entries.jsonl
+  staging/
+
 {agent_root}/commons/journals/ocas-lucid/
   YYYY-MM-DD/
     {run_id}.json
-
-{agent_root}/commons/data/ocas-lucid/
-  ingestion_log.jsonl
-  decisions.jsonl
 ```
-
----
 
 ## Initialization
 
-On first invocation, create:
+On `lucid.init` or first invocation:
 
-1. `{agent_root}/commons/journals/ocas-lucid/` (with today's date subdirectory)
-2. `{agent_root}/commons/data/ocas-lucid/`
-3. Empty `ingestion_log.jsonl` and `decisions.jsonl`
-4. Register cron job `lucid:dream` (3am nightly) if not already present
+1. Create `{agent_root}/commons/data/ocas-lucid/` and subdirectories (`staging/`)
+2. Write default `config.json` with ConfigBase fields and skill-specific defaults
+3. Create empty `ingestion_log.jsonl`, `decisions.jsonl`, `recirculation_queue.jsonl`, `removed_entries.jsonl`
+4. Create `{agent_root}/commons/journals/ocas-lucid/`
+5. Register cron jobs `lucid:dream` and `lucid:update` if not already present (check before registering)
+6. Log initialization as a DecisionRecord
 
----
+## Dream cycle
 
-## Commands
+Four phases executed sequentially. Each journal is processed to completion (file + cursor advance) before moving to the next, ensuring mid-run termination loses no filed work.
 
-- `lucid.dream` — run the nightly dream loop: ingest journals, decide, file, journal
-- `lucid.status` — current state: last run timestamp, pending decisions, total files processed
-- `lucid.update` — pull latest from GitHub source; preserves journals and data
+### Phase 1: Orient
 
----
+1. Read `config.json` for all settings
+2. Read last dream record from `{agent_root}/commons/journals/ocas-lucid/` to see prior run summary
+3. Read `ingestion_log.jsonl` to determine cursor position (last processed run_id per skill)
+4. Call `mempalace_status` to verify MemPalace is available
+5. Check hibernation: if no new journals exist across any skill for 7+ consecutive days, log skip and exit with zero IO
+6. Count available unprocessed journals. If zero, enter skip path: run re-emergence check, surface one old memory, write abbreviated dream journal, exit
 
-## Ingestion pipeline
+### Phase 2: Gather
 
-1. **Scanning Phase**
-   - Fresh Scan: Read all new journals from `{agent_root}/commons/journals/` since the last successful run.
-   - Recirculation: Every 7 days, re-scan journal entries that were previously "skipped" to see if new context has promoted them to "strong signals."
-   - Use `ingestion_log.jsonl` to track processing status and timestamp for every file.
+1. Scan `{agent_root}/commons/journals/` across all skill directories for journal files newer than the cursor
+2. Cap at 40 journals per run. If more exist, process oldest first; remainder picked up next cycle
+3. Load recirculation queue: journals previously skipped that are due for re-evaluation (skip timestamp >= 7 days ago)
+4. Read each journal file in full
 
-2. **Analysis Phase**
-   - For each entry, calculate a relevance score based on entity relevance, decision keywords, and age.
-   - Classify:
-     - **Decision Record** $\rightarrow$ Chronicle (Subject $\rightarrow$ Predicate $\rightarrow$ Object)
-     - ** Specification/Data** $\rightarrow$ MemPalace Drawer (Wing/Room based on context)
-     - **Reflection** $\rightarrow$ AAAK Diary (MemPalace)
-   - Check for duplicates via `mempalace_check_duplicate` before filing.
-   - Perform a "Topical Drift" check for recirculated entries: query the KG for entities mentioned in the entry to see if they have since become relevant.
+### Phase 3: Classify
 
-3. **Routing Decision**
-   - Is this a fact about relationships? → Chronicle
-   - Is this verbatim content that needs exact phrasing? → MemPalace Drawer
-   - Is this a personal observation or meta-reflection? → AAAK Diary
+For each journal, compute a relevance score. Read `references/classification.md` for the full scoring model and filing taxonomy.
 
-4. **Filing Phase**
-   - Call `mempalace_kg_add` for Chronicle facts
-   - Call `mempalace_add_drawer` for verbatim content
-   - Call `mempalace_diary_write` for AAAK entries
-   - Log success/failure to `decisions.jsonl`
+Four possible outcomes per journal:
 
-5. **Journal Phase**
-   - Write summary journal entry to `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json`
-   - Include: total entries scanned, entries filed, failures, notable discoveries
+**File to MemPalace drawer**: journal contains session context, reasoning, or narrative worth preserving verbatim. Select wing (source skill domain) and room (content topic). Check for duplicates via `mempalace_check_duplicate` before filing.
 
----
+**File to MemPalace KG**: journal contains a temporal relationship or entity fact suitable for MemPalace's SQLite knowledge graph. Use `mempalace_kg_add` with validity window.
 
-## Safety invariants
+**Emit Signal to Elephas**: journal contains a structured entity or relationship meeting the confidence threshold for Chronicle promotion. Write Signal to the `signal` payload field in Lucid's own dream journal entry. One Signal per entity or relationship with sufficient confidence. See Signal schema in `spec-ocas-shared-schemas.md`.
 
-- Never file duplicate content (check before filing)
-- Never overwrite existing drawers (check `mempalace_check_duplicate`)
-- Log all failures to `decisions.jsonl` for later manual review
-- Use `background=true` for the entire pipeline to avoid timeout
+**Skip**: journal is routine operational telemetry with no durable value. Log reason. Add to recirculation queue with current timestamp for future re-evaluation.
 
----
+### Phase 4: File
+
+Process each journal to completion before advancing:
+
+1. Execute the filing decision (MemPalace MCP call, KG write, or Signal payload write)
+2. On success: append DecisionRecord to `decisions.jsonl`
+3. Update `ingestion_log.jsonl` with the processed run_id
+4. Move to next journal
+
+After all journals processed:
+
+5. Run re-emergence check (see below)
+6. Run two-pass stale check (see below)
+7. Write dream journal to `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json`
+
+### Incremental cursor
+
+The ingestion log tracks each processed run_id. If the session terminates mid-run, the next cycle resumes from the first unprocessed journal. Filed content and cursor updates are durable -- only the dream journal summary is lost on interruption.
+
+## Re-emergence detection
+
+Maintained in `removed_entries.jsonl`. Each skipped journal's key topics (entity names, concepts, domain) are recorded.
+
+On every cycle, compare current journal topics against removed entries. If a topic that was previously skipped appears in 3+ subsequent journals, auto-promote it: file to MemPalace with elevated priority and remove from skip tracking. Log the re-emergence event in the dream journal.
+
+Intuition: recurring topics are more important than they initially appeared.
+
+## Two-pass stale handling
+
+Applies to content Lucid previously filed in MemPalace, not to source journals.
+
+If newer journal evidence contradicts a previously filed MemPalace entry:
+- First encounter: mark as stale in `decisions.jsonl` with reason and contradicting evidence
+- Second consecutive encounter (next run still contradicted): invalidate via `mempalace_kg_invalidate` or flag drawer for removal
+
+Never delete on first contradiction. Two consecutive confirmations required.
+
+## Change magnitude gates
+
+Per-run safety check after classification, before filing:
+
+- If >30% of scanned journals would be filed (unusually high): flag in dream journal as a warning, continue filing
+- If >50% would be filed: pause. Write proposed filings to `{agent_root}/commons/data/ocas-lucid/staging/` as a review file. Do not file. Log the hold in decisions.jsonl. Notify operator.
+
+## Hibernation protection
+
+If no new journals have been written by any skill for 7 consecutive days, Lucid skips its cycle entirely with zero IO. On the first new journal after hibernation, run a full catch-up pass (still capped at 40 journals per run).
+
+## Dream journal output
+
+Journal type: Action (writes to MemPalace are external side effects).
+
+Written to `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json` using the standard JournalEntry schema with journal_spec_version "1.3".
+
+Contents include:
+- Total journals scanned, filed (by destination type), skipped
+- Recirculation promotions and re-emergence events
+- Change magnitude stats
+- Stale items pending second-pass deletion
+- Cumulative filing count, streak count, milestone flags
+- One resurfaced old memory from MemPalace (>7 days old, randomly selected relevant filing)
+- `signal` payload field: Signal files for any entities or relationships extracted during the run
+
+On skip path (no new journals): abbreviated journal with re-emergence check result, resurfaced memory, and streak count.
+
+## OKR evaluation
+
+Universal OKRs per spec-ocas-journal.md, plus:
+
+| OKR | Metric | Target | Window |
+|-----|--------|--------|--------|
+| Ingestion coverage | journals scanned / journals available | >= 0.99 | 30 runs |
+| Duplicate avoidance | filings passing duplicate check without collision | >= 0.95 | 30 runs |
+| Recirculation rate | recirculated items eventually filed / total recirculated | trend (no fixed target) | 30 runs |
+| Signal emission precision | emitted Signals promoted by Elephas / total emitted | >= 0.80 | 30 runs |
 
 ## Inter-skill interfaces
 
-Lucid consumes:
+**Reads (all read-only):**
+- All skill journals from `{agent_root}/commons/journals/` (same access pattern as Mentor and Elephas)
 
-- All skill journals from `{agent_root}/commons/journals/` (read-only scan)
-- MemPalace MCP tools for filing (read checks, write actions)
+**Writes:**
+- MemPalace drawers and KG via MCP tools (external)
+- Signal payload field in own dream journal (standard Signal schema from spec-ocas-shared-schemas.md)
+- Own journal, data, and decisions files only
 
-Lucid produces:
+**Queries:**
+- `mempalace_status`, `mempalace_search`, `mempalace_check_duplicate`, `mempalace_get_taxonomy` (read)
+- `mempalace_add_drawer`, `mempalace_kg_add`, `mempalace_kg_invalidate` (write)
+- `elephas.query` (optional, for pre-emission entity existence check)
 
-- Journal entries to its own directory (`ocas-lucid/YYYY-MM-DD/`)
-- Journal entries to global journal directory for other skills to consume
-- Updates to MemPalace (Chronicle and document drawers)
-
----
-
-## Nightly cron job (lucid:dream)
+## Background tasks
 
 | Job name | Mechanism | Schedule | Command |
-|---|---|---|---|
-| `lucid:dream` | cron | `0 3 * * *` (3am local) | `lucid.dream` — full daily dream loop |
+|----------|-----------|----------|---------|
+| `lucid:dream` | cron | `0 3 * * *` (3am local) | `lucid.dream` |
+| `lucid:update` | cron | `0 0 * * *` (midnight daily) | `lucid.update` |
 
-Cron options: `sessionTarget: isolated`, `lightContext: true`, `wakeMode: next-heartbeat`.
+Cron configuration: isolated session, light context. Operators with high journal volume (many active skills) may benefit from raising `max_turns` to 150 in their agent config.
 
-Registration during `lucid.init`:
+No heartbeat entry. Lucid needs one substantial batch run per day, not lightweight polling.
 
-```
-# Check platform scheduling registry for existing tasks
-# Task declared in SKILL.md frontmatter metadata.{platform}.cron
-# If lucid:dream absent:
-#   register via platform cron API
-```
+## Platform notes
 
----
+The 40-journal-per-run cap and incremental cursor keep turn count well within the default iteration budget. Each filing cycle (read journal → check duplicate → file → advance cursor) resets the activity-based timeout in Hermes v0.8+, so long runs complete naturally without inactivity timeouts.
+
+If a session terminates mid-run, no filed work is lost. The cursor advances after each successful filing. The next run picks up from the first unprocessed journal.
+
+## Ontology mapping
+
+Lucid extracts no entities from user data directly. It classifies and routes journal content produced by other skills. When it emits Signals to Elephas, the Signal's `payload.type` reflects the entity type found in the source journal (Person, Place, Concept, etc.) per spec-ocas-ontology.md.
 
 ## Self-update
 
-`lucid.update` pulls the latest package from the GitHub source defined in the frontmatter. Runs silently — no output unless version changed or error occurred.
+`lucid.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred.
 
-1. Read `source:` from frontmatter → extract `{owner}/{repo}`
-2. Read local version from `metadata.version`
-3. Fetch remote version: `gh api "repos/{owner}/{repo}/contents/SKILL.md" --jq '.content' | base64 -d | grep 'version:' | head -1 | sed 's/.*\"\\(.*\\)\".*/\\1/'`
+1. Read `source:` from frontmatter → extract `{owner}/{repo}` from URL
+2. Read local version from SKILL.md frontmatter `metadata.version`
+3. Fetch remote version: `gh api "repos/{owner}/{repo}/contents/SKILL.md" --jq '.content' | base64 -d | grep 'version:' | head -1 | sed 's/.*"\(.*\)".*/\1/'`
 4. If remote version equals local version → stop silently
 5. Download and install:
    ```bash
@@ -210,50 +282,12 @@ Registration during `lucid.init`:
 6. On failure → retry once. If second attempt fails, report the error and stop.
 7. Output exactly: `I updated Lucid from version {old} to {new}`
 
----
-
 ## Visibility
 
 public
 
----
+## Support file map
 
-## Journal output
-
-Every run writes a summary journal with the following schema:
-
-```json
-{
-  "run_id": "YYYYMMDD-HHmmss",
-  "date": "YYYY-MM-DD",
-  "entities_scanned": N,
-  "entities_filed": N,
-  "failures": N,
-  "notable_discoveries": ["fact1", "fact2"],
-  "top_domains": ["wing1: count", "wing2: count"]
-}
-```
-
-This journal is written to both:
-- `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json`
-- `{agent_root}/commons/journals/YYYY-MM-DD/ocas-lucid-{run_id}.json`
-
----
-
-## Example: Ingestion Decision Flow
-
-**Scenario:** During a session, I discover that "Hermes Agent uses GPT-4o-mini for its CLI mode."
-
-**Real-time:** I may not file it immediately.
-
-**Lucid (nightly):**
-1. Reads journal entry containing the phrase "GPT-4o-mini"
-2. Classifies it as a system fact with relationship potential
-3. Routes to Chronicle:
-   - Subject: `Hermes Agent`
-   - Predicate: `uses_model`
-   - Object: `GPT-4o-mini`
-4. Files via `mempalace_kg_add`
-5. Logs success to `decisions.jsonl`
-
-**Result:** Future queries about Hermes Agent's models now return this fact automatically.
+| File | When to read |
+|------|-------------|
+| `references/classification.md` | Before classifying any journal entry. Contains the relevance scoring model, filing taxonomy, wing/room assignment rules, and skip criteria. |

@@ -1,87 +1,49 @@
-# ocas-lucid skill package
+# 🌙 Lucid
 
-## Files
+Nightly journal curator. Batch-processes OCAS skill journals into MemPalace's verbatim store each night at 3am — classifying each entry for filing as a drawer, knowledge graph triple, Elephas Signal, or skip.
 
-- `SKILL.md` — Skill specification with YAML frontmatter, commands, and operational rules
-- `REFERENCES/init-script.py` — Initialization logic (creates directories, log files)
-- `REFERENCES/dream-loop.py` — Main dream loop pipeline (scans journals, classifies, files)
-- `REFERENCES/cron-command.sh` — Cron entry point, invokes dream loop in background
+Skill packages follow the [agentskills.io](https://agentskills.io/specification) open standard and are compatible with OpenClaw, Hermes Agent, and any agentskills.io-compliant client.
 
-## Architecture
+---
 
-### How it avoids timeout
+## Overview
 
-The dream loop spawns as a **background process** using `subprocess.Popen([...], env=os.environ)`. This detaches execution from the current tool call, allowing it to run indefinitely without hitting the 5-minute timeout.
+Lucid sits between the journal layer and the memory layer. Every night it reads new journals from all installed OCAS skills, scores each for relevance, and routes them: verbatim narratives go to MemPalace drawers, entity facts go to the MemPalace knowledge graph, structured entities worth Chronicle promotion go to Elephas as Signals, and routine telemetry is skipped or queued for re-evaluation.
 
-### Storage layout
+The dream cycle is resilient: an incremental cursor advances after each successful filing, so interrupted runs resume cleanly. Re-emergence detection auto-promotes topics that keep appearing after initial skip. Two-pass stale handling prevents hasty invalidations. Change magnitude gates catch anomalous runs before they overwrite the store.
 
-```
-/root/.hermes/commons/
-  journals/ocas-lucid/
-    YYYY-MM-DD/
-      {run_id}.json
-  data/ocas-lucid/
-    ingestion_log.jsonl   # Tracks last successful run
-    decisions.jsonl       # Logs all filing decisions (success/failure)
-```
+## Commands
 
-### Cron registration
+| Command | Description |
+|---|---|
+| `lucid.dream` | Run the full dream cycle immediately |
+| `lucid.status` | Last run timestamp, pending journals, filing stats, streak count |
+| `lucid.init` | Create storage directories, initialize config, register cron jobs |
+| `lucid.update` | Pull latest from GitHub source (preserves journals and data) |
 
-The SKILL.md frontmatter defines the cron job:
-```yaml
-metadata:
-  hermes:
-    cron:
-      - name: "lucid:dream"
-        schedule: "0 3 * * *"
-        command: "lucid.dream"
-```
+## Setup
 
-When `lucid.init` runs (via skill initialization) or on first invocation, the cron job is registered via the platform's scheduling API.
+`lucid.init` runs automatically on first invocation. Requires the **MemPalace MCP server** to be installed and configured — Lucid cannot file to MemPalace without it.
 
-### Nightly flow (3am daily)
+Operators with many active skills may benefit from raising `max_turns` to 150 in their agent config for the `lucid:dream` cron session.
 
-1. **Cron triggers** → invokes `lucid.dream`
-2. **Background spawn** → `dream-loop.py` detaches via `subprocess.Popen`
-3. **Scans journals** → reads all `*.json` files in `{agent_root}/commons/journals/`
-4. **Classifies** → decides MemPalace vs Chronicle vs Skip
-5. **Files** → calls `mempalace_kg_add` or `mempalace_add_drawer`
-6. **Logs** → appends to `decisions.jsonl`, updates `ingestion_log.jsonl`
-7. **Notifies** → `notify_on_complete=true` sends final summary to origin
+## Dependencies
 
-### Why this design works
+**OCAS Skills**
+- [Elephas](https://github.com/indigokarasu/elephas) — optional Signal pre-check via `elephas.query`; Lucid emits Signals via journal payload for Elephas to promote
 
-- **Non-blocking**: Background subprocess ensures the cron job returns immediately, avoiding platform timeout
-- **Idempotent**: Uses `ingestion_log.jsonl` to track processed days; no re-processing
-- **Resilient**: Logs failures to `decisions.jsonl` for later manual review
-- **Extensible**: New classification rules can be added without touching the core loop
+**External**
+- MemPalace MCP server (required) — verbatim drawer storage and knowledge graph
 
-## Usage
+## Scheduled Tasks
 
-### Manual invocation
+| Job | Mechanism | Schedule | Command |
+|---|---|---|---|
+| `lucid:dream` | cron | `0 3 * * *` (3am local) | Nightly journal curation |
+| `lucid:update` | cron | `0 0 * * *` (midnight daily) | Self-update from GitHub |
 
-```bash
-# After skill installation
-lucid.dream
-```
+## Changelog
 
-### View status
-
-```bash
-# Check last run date and decision statistics
-cat ~/.hermes/commons/data/ocas-lucid/decisions.jsonl | tail -n20
-```
-
-### Manually re-run
-
-```bash
-# Reset the ingestion log to force a re-run
-echo '{"last_run_date": "2026-04-12"}' > ~/.hermes/commons/data/ocas-lucid/ingestion_log.jsonl
-lucid.dream
-```
-
-## Notes
-
-- If MemPalace is not configured or unavailable, the dream loop skips filing and logs failures to `decisions.jsonl`
-- The loop only processes journals with a `"date"` field ≥ the last run date
-- Empty or malformed journal entries are skipped silently; errors are logged
+### v2.0.0 — April 13, 2026
+- Complete rewrite: four-phase dream cycle (Orient, Gather, Classify, File), incremental cursor, re-emergence detection, two-pass stale handling, change magnitude gates, hibernation protection
+- Standard `{agent_root}` paths, journal payload Signal emission, removed Python scripts
