@@ -17,10 +17,10 @@ metadata:
     category: memory
     cron:
       - name: "lucid:dream"
-        schedule: "0 3 * * *"
+        schedule: "10 10 * * *"
         command: "lucid.dream"
       - name: "lucid:update"
-        schedule: "0 0 * * *"
+        schedule: "25 7 * * *"
         command: "lucid.update"
   openclaw:
     skill_type: system
@@ -45,10 +45,10 @@ metadata:
           required: true
     cron:
       - name: "lucid:dream"
-        schedule: "0 3 * * *"
+        schedule: "10 10 * * *"
         command: "lucid.dream"
       - name: "lucid:update"
-        schedule: "0 0 * * *"
+        schedule: "25 7 * * *"
         command: "lucid.update"
 ---
 
