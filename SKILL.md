@@ -286,6 +286,13 @@ Lucid extracts no entities from user data directly. It classifies and routes jou
 
 public
 
+## Pitfalls
+
+- **Journal discovery requires `os.walk`**: `search_files` with glob patterns does not reliably find JSON journals nested in date subdirectories under `{agent_root}/commons/journals/`. Use `execute_code` with `os.walk` to enumerate all `.json` files across skill directories, then cross-reference against the ingestion log's processed set.
+- **`mempalace_kg_add` rejects parentheses**: The `object` field in KG triples cannot contain parentheses `()`. Strip or rephrase values like "laith Ulaby (case variant)" → "Laith Ulaby variant".
+- **Journal fields may be null**: Some journals have `None` for string fields (`reasoning_summary`, `decision.description`, etc.). Always coalesce to empty string before calling `.strip()` or string operations.
+- **Ingestion log format varies**: Older entries use `{skill, run_id, timestamp, action}` format; newer entries use `{run_id, skill, journal, processed_at, score, filing}`. Both identify journals by `(skill, run_id)` tuple — check both formats when building the processed set.
+
 ## Support file map
 
 | File | When to read |
