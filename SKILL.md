@@ -11,7 +11,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "2.0.0"
+  version: "2.0.1"
   hermes:
     tags: [memory, ingestion, dream-loop]
     category: memory
@@ -158,6 +158,22 @@ Process each journal to completion before advancing:
 2. On success: append DecisionRecord to `decisions.jsonl`
 3. Update `ingestion_log.jsonl` with the processed run_id
 4. Move to next journal
+
+**MemPalace KG character restrictions (pitfall):** The `mempalace_kg_add` tool rejects `subject`, `predicate`, and `object` values containing special characters. Known failures:
+- `/` (slash) in values like "House Music / DJing" → replace with "and" or remove
+- `#` (hash) in values like "PR#213" → spell out as "PR 213"
+- `:` (colon) in subjects like "elephas:deep" → replace with hyphen "elephas-deep"
+- Parentheses, brackets, and other punctuation may also fail
+
+Sanitize all KG field values before calling `mempalace_kg_add`. If a triple fails, retry with cleaned text rather than skipping.
+
+**Journal path normalization (pitfall):** The config cursor may store paths in a nested format like `ocas-vesper/ocas-vesper/2026-04-10/file.json` while actual files live at `ocas-vesper/2026-04-10/file.json`. When building the processed set from the cursor, use only the filename portion as the dedup key, or normalize paths by stripping the duplicated directory segment. Otherwise previously-processed journals get re-scanned.
+
+**Recirculation queue format inconsistency (pitfall):** Older entries in `recirculation_queue.jsonl` may use different field names (e.g., `skipped_at` vs `added_at` or missing entirely). When reading the queue, use `.get()` with a default rather than direct key access. If a timestamp field is missing, treat the entry as due for re-evaluation.
+
+**Datetime timezone handling (pitfall):** When comparing recirculation queue timestamps against `datetime.utcnow()`, ensure both are either offset-aware or offset-naive. Use `datetime.now(timezone.utc)` for offset-aware comparisons, and parse incoming timestamps with `fromisoformat(... +00:00)` or add `tzinfo=timezone.utc` if missing.
+
+**Cursor tracking (Gather phase note):** Build the processed-journal set from *both* `config.json` cursor AND `ingestion_log.jsonl`. The cursor only tracks the last batch's files, while the ingestion log has the full history. Missing this causes re-processing of previously handled journals.
 
 After all journals processed:
 
