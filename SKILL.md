@@ -11,7 +11,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  "2.0.2"
+  version: "2.0.2"
   hermes:
     tags: [memory, ingestion, dream-loop]
     category: memory
