@@ -44,6 +44,9 @@ Operators with many active skills may benefit from raising `max_turns` to 150 in
 
 ## Changelog
 
+
+### v2.0.2 — April 26, 2026
+- Version alignment per spec-ocas-skill-publishing.md (no functional change)
 ### v2.0.0 — April 13, 2026
 - Complete rewrite: four-phase dream cycle (Orient, Gather, Classify, File), incremental cursor, re-emergence detection, two-pass stale handling, change magnitude gates, hibernation protection
 - Standard `{agent_root}` paths, journal payload Signal emission, removed Python scripts
