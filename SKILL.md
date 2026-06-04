@@ -1,28 +1,61 @@
 ---
 name: ocas-lucid
-description: >
-  Nightly journal curator. Batch-processes OCAS skill journals into MemPalace's
+description: 'Nightly journal curator. Batch-processes OCAS skill journals into MemPalace''s
   verbatim store via MCP tools. Classifies each journal for filing as a MemPalace
-  drawer, MemPalace KG triple, Elephas Signal, or skip. Features re-emergence
-  detection, two-pass stale handling, change magnitude gates, hibernation
-  protection, and incremental cursor-based resumption.
-  Trigger: dream cycle, journal consolidation, MemPalace filing, memory curation,
-  "run lucid", "what did I dream", "journal curation", nightly batch.
-  NOT for real-time memory filing, skill evaluation, behavioral pattern detection,
+  drawer, MemPalace KG triple, Elephas Signal, or skip. Features re-emergence detection,
+  two-pass stale handling, change magnitude gates, hibernation protection, and incremental
+  cursor-based resumption. Trigger: dream cycle, journal consolidation, MemPalace
+  filing, memory curation, "run lucid", "what did I dream", "journal curation", nightly
+  batch. NOT for real-time memory filing, skill evaluation, behavioral pattern detection,
   or entity identity resolution.
+
+  '
 license: MIT
 source: https://github.com/indigokarasu/lucid
 includes:
-  - references/**
-  - scripts/**
+- references/**
+- scripts/**
 metadata:
-  author: Indigo Karasu
-  version: 2.0.2
+  author: Indigo Karasu (indigokarasu)
+  version: 2.0.4
+triggers:
+- nightly journal
+- journal curation
+- skill journal batch
+- mem-Palace filing
+- curate journals
 ---
 
 # Lucid
 
 Nightly journal curator. Batch-processes journals from all OCAS skills into MemPalace's verbatim semantic store. Structured facts worth promoting to Chronicle are emitted as Signals to Elephas via the journal signal payload -- Lucid never writes to Chronicle or Weave directly.
+
+## Interactive Menu
+
+When invoked interactively (via `/` command), present a menu using the `clarify` tool so the user can pick which function to run.
+
+```python
+result = clarify(
+    question="What would you like to do?",
+    choices=[
+        "dream — Run the full dream cycle",
+        "status — Show system status",
+        "init — Initialize environment",
+        "update — Pull latest from GitHub",
+    ]
+)
+```
+
+After the user selects an action, execute it following the relevant procedure in this skill. Loop back to the menu after each action completes, until the user chooses to exit or sends `/stop`.
+
+### Response parsing
+
+Match the user's response against the full choice string. If the response doesn't match any known choice (user typed free-form via "Other"), match key prefixes case-insensitively. Re-present the menu on no match.
+
+### Platform adaptation
+
+On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list.
+
 
 ## When to Use
 
@@ -151,25 +184,9 @@ See `references/platform-notes.md` for iteration budget, timeout behavior, and m
 
 Lucid extracts no entities from user data directly. It classifies and routes journal content produced by other skills. When it emits Signals to Elephas, the Signal's `payload.type` reflects the entity type found in the source journal (Person, Place, Concept, etc.) per spec-ocas-ontology.md.
 
-## Self-update
+## Self-Update
 
-`lucid.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred.
-
-1. Read `source:` from frontmatter → extract `{owner}/{repo}` from URL
-2. Read local version from SKILL.md frontmatter `metadata.version`
-3. Fetch remote version: `gh api "repos/{owner}/{repo}/contents/SKILL.md" --jq '.content' | base64 -d | grep 'version:' | head -1 | sed 's/.*"\(.*\)".*/\1/'`
-4. If remote version equals local version → stop silently
-5. Download and install:
-   ```bash
-   TMPDIR=$(mktemp -d)
-   gh api "repos/{owner}/{repo}/tarball/main" > "$TMPDIR/archive.tar.gz"
-   mkdir "$TMPDIR/extracted"
-   tar xzf "$TMPDIR/archive.tar.gz" -C "$TMPDIR/extracted" --strip-components=1
-   cp -R "$TMPDIR/extracted/"* ./
-   rm -rf "$TMPDIR"
-   ```
-6. On failure → retry once. If second attempt fails, report the error and stop.
-7. Output exactly: `I updated Lucid from version {old} to {new}`
+See `references/self-update-lucid.md`.
 
 ## Visibility
 
@@ -178,6 +195,22 @@ public
 ## Gotchas
 
 See `references/gotchas.md` for all operational pitfalls including journal discovery, KG triple sanitization, null field handling, ingestion log format variance, cursor resumption, and recirculation queue edge cases.
+
+### Scoring trap: payload keys vs. narrative content
+
+The `correction_or_lesson(+4)` signal must ONLY fire on narrative text fields (`summary`, `description`, `reasoning_summary`). Do NOT count payload dictionary **key names** (like `lessons_extracted`) as content — this causes routine operational journals to score 6+ and get filed as noise. Apply keyword checks to the extracted narrative text only, not to the full serialized JSON.
+
+### MemPalace wing fallback
+
+`mempalace_list_wings` may return only `root` even though the classification taxonomy defines wings like `wing_research`, `wing_knowledge`, etc. When this happens, file into `root/<room>` where `<room>` is the wing's topic slug (e.g., `root/preferences`, `root/operations`, `root/evolution`). Do not attempt to create custom wings via MCP — it is not supported.
+
+### Always execute KG writes
+
+During Phase 4 (File), if the classification phase identified KG triples for a journal, you MUST call `mempalace_kg_add` for each triple. Filing only the drawer and silently skipping KG writes loses relationship data. The classification step identifies triples; the filing step must persist them.
+
+### Reference file resilience
+
+`references/dream-cycle.md`, `references/re-emergence.md`, `references/safety-gates.md`, and `references/dream-journal.md` may not exist on disk even though the Support File Map references them. When a reference file is missing, fall back to the procedural instructions in the SKILL.md body itself. Do not block the run.
 
 ## Support File Map
 
