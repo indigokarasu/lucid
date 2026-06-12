@@ -10,6 +10,8 @@ Each journal entry receives a numeric relevance score. The score determines fili
 
 **CRITICAL**: Before scoring, extract text ONLY from narrative fields. Do NOT serialize the entire journal JSON (including payload dictionary keys) into the search text, because payload key names like `lessons_extracted`, `events_recorded`, `signals_created` contain scoring-triggering words that are NOT narrative content.
 
+**COUNT-SUMMARY FALSE POSITIVE**: Journals that report ingest counts in their summary field (e.g., `"Ingest complete: 7 journals scanned, 1 new events, 9 new lessons, 0 shifts activated"`) contain the word "lessons" as a **metric count**, not as narrative about a lesson learned. The `correction_or_lesson(+4)` signal must NOT fire on these. Before applying the lesson signal, check whether the matched word appears in a count-summary context (pattern: `"N new lessons"`, `"N lessons"`, `"lessons: N"` at the start of a summary). If the surrounding text is purely numeric/metric, skip the signal. This applies equally to "events", "shifts", and other payload-key words that may appear in count summaries.
+
 **Narrative fields to extract** (in priority order):
 1. `decision.summary` / `decision.description`
 2. `decision.reasoning_summary`

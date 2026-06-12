@@ -1,15 +1,12 @@
 ---
 name: ocas-lucid
-description: 'Nightly journal curator. Batch-processes OCAS skill journals into MemPalace''s
-  verbatim store via MCP tools. Classifies each journal for filing as a MemPalace
-  drawer, MemPalace KG triple, Elephas Signal, or skip. Features re-emergence detection,
-  two-pass stale handling, change magnitude gates, hibernation protection, and incremental
-  cursor-based resumption. Trigger: dream cycle, journal consolidation, MemPalace
-  filing, memory curation, "run lucid", "what did I dream", "journal curation", nightly
-  batch. NOT for real-time memory filing, skill evaluation, behavioral pattern detection,
-  or entity identity resolution.
-
-  '
+description: 'Nightly journal curator. Batch-processes OCAS skill journals via relevance
+  classification and writes curated content to journal files for the configured memory
+  provider to ingest. Classifies each journal for filing as a verbatim journal note,
+  structured entity/relationship data, or skip. Features re-emergence detection,
+  two-pass stale handling, change magnitude gates, hibernation protection,
+  and incremental cursor-based resumption. NOT for real-time memory filing,
+  skill evaluation, behavioral pattern detection, or entity identity resolution.'
 license: MIT
 source: https://github.com/indigokarasu/lucid
 includes:
@@ -17,45 +14,31 @@ includes:
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 2.0.4
+  version: 3.0.0
+tags:
+- journal
+- curation
+- nightly
+- OCAS-core
 triggers:
 - nightly journal
 - journal curation
 - skill journal batch
-- mem-Palace filing
 - curate journals
 ---
 
 # Lucid
 
-Nightly journal curator. Batch-processes journals from all OCAS skills into MemPalace's verbatim semantic store. Structured facts worth promoting to Chronicle are emitted as Signals to Elephas via the journal signal payload -- Lucid never writes to Chronicle or Weave directly.
+Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
+by relevance, and writes curated content to Lucid's journal files. The configured memory
+provider reads these journals during its ingestion cycle and decides what to persist.
+
+Lucid does NOT depend on any specific memory provider. It writes to
+`{agent_root}/commons/journals/ocas-lucid/` and lets the memory provider handle ingestion.
 
 ## Interactive Menu
 
-When invoked interactively (via `/` command), present a menu using the `clarify` tool so the user can pick which function to run.
-
-```python
-result = clarify(
-    question="What would you like to do?",
-    choices=[
-        "dream — Run the full dream cycle",
-        "status — Show system status",
-        "init — Initialize environment",
-        "update — Pull latest from GitHub",
-    ]
-)
-```
-
-After the user selects an action, execute it following the relevant procedure in this skill. Loop back to the menu after each action completes, until the user chooses to exit or sends `/stop`.
-
-### Response parsing
-
-Match the user's response against the full choice string. If the response doesn't match any known choice (user typed free-form via "Other"), match key prefixes case-insensitively. Re-present the menu on no match.
-
-### Platform adaptation
-
-On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list.
-
+When invoked interactively, present a two-level menu. See `references/interactive-menu.md` for the full menu structure.
 
 ## When to Use
 
@@ -76,7 +59,7 @@ Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG), relevance
 
 Lucid does not own: Chronicle writes (Elephas only), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
 
-Adjacent boundaries: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Mentor also reads journals but for OKR evaluation. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace.
+**Adjacent boundaries**: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace. When elephas is run manually (skill archived), update `config.json` cursor to include new elephas journal files to prevent lucid re-processing.
 
 ## Optional skill cooperation
 
@@ -178,7 +161,7 @@ Universal OKRs per `spec-ocas-journal.md`, plus skill-specific targets. See `ref
 | `lucid:dream` | cron | `0 3 * * *` (3am local) | `lucid.dream` |
 | `lucid:update` | cron | `0 0 * * *` (midnight daily) | `lucid.update` |
 
-See `references/platform-notes.md` for iteration budget, timeout behavior, and mid-run termination safety.
+See `references/cron-execution.md` for cron-specific execution patterns (heredoc Python, two-pass classification, degraded mode).
 
 ## Ontology mapping
 
@@ -192,11 +175,13 @@ See `references/self-update-lucid.md`.
 
 public
 
-## Gotchas
+## Recirculation Queue `re_evaluations` Field
 
-See `references/gotchas.md` for all operational pitfalls including journal discovery, KG triple sanitization, null field handling, ingestion log format variance, cursor resumption, and recirculation queue edge cases.
+- **`re_evaluations` can be `null` (not 0)** in older queue entries. Always use `e.get('re_evaluations') or 0` when comparing. Direct `>= 3` comparison against `null` returns `False` in Python and silently skips cleanup.
 
-### Scoring trap: payload keys vs. narrative content
+## Scoring Traps
+
+### Payload keys vs. narrative content
 
 The `correction_or_lesson(+4)` signal must ONLY fire on narrative text fields (`summary`, `description`, `reasoning_summary`). Do NOT count payload dictionary **key names** (like `lessons_extracted`) as content — this causes routine operational journals to score 6+ and get filed as noise. Apply keyword checks to the extracted narrative text only, not to the full serialized JSON.
 
@@ -216,6 +201,7 @@ During Phase 4 (File), if the classification phase identified KG triples for a j
 
 | File | When to read |
 |------|-------------|
+| `references/cron-execution.md` | Before running any dream cycle in cron context. Contains the heredoc Python pattern, two-pass classification workflow, and degraded mode decision tree. |
 | `references/classification.md` | Before classifying any journal entry. Contains the relevance scoring model, filing taxonomy, wing/room assignment rules, and skip criteria. |
 | `references/dream-cycle.md` | Before executing the dream cycle. Phase-by-phase procedure (Orient, Gather, Classify, File), cursor tracking, and filing pitfalls. |
 | `references/re-emergence.md` | During post-file cleanup. Re-emergence detection (3+ threshold, auto-promotion) and two-pass stale handling. |
