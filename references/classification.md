@@ -6,14 +6,34 @@ Relevance scoring model, filing taxonomy, and wing/room assignment rules for Luc
 
 Each journal entry receives a numeric relevance score. The score determines filing vs skip.
 
+### Content extraction for scoring
+
+**CRITICAL**: Before scoring, extract text ONLY from narrative fields. Do NOT serialize the entire journal JSON (including payload dictionary keys) into the search text, because payload key names like `lessons_extracted`, `events_recorded`, `signals_created` contain scoring-triggering words that are NOT narrative content.
+
+**COUNT-SUMMARY FALSE POSITIVE**: Journals that report ingest counts in their summary field (e.g., `"Ingest complete: 7 journals scanned, 1 new events, 9 new lessons, 0 shifts activated"`) contain the word "lessons" as a **metric count**, not as narrative about a lesson learned. The `correction_or_lesson(+4)` signal must NOT fire on these. Before applying the lesson signal, check whether the matched word appears in a count-summary context (pattern: `"N new lessons"`, `"N lessons"`, `"lessons: N"` at the start of a summary). If the surrounding text is purely numeric/metric, skip the signal. This applies equally to "events", "shifts", and other payload-key words that may appear in count summaries.
+
+**Narrative fields to extract** (in priority order):
+1. `decision.summary` / `decision.description`
+2. `decision.reasoning_summary`
+3. `action.side_effect_intent`
+4. `action.reason`
+5. `urgent_issues[].summary`
+6. `anomalies[].summary`
+
+**Do NOT use for scoring**:
+- `decision.payload` dictionary **keys** (values are OK if they are short strings, but keys like `lessons_extracted` will false-trigger)
+- `metrics` fields (pure numbers)
+- `okr_evaluation` fields (Mentor's domain)
+- `entities_observed`, `relationships_observed`, `preferences_observed` (structured data, not narrative)
+
 ### Scoring signals (additive)
 
 | Signal | Points | Detection |
 |--------|--------|-----------|
 | Decision keywords | +3 | Content contains: decided, confirmed, agreed, resolved, committed, approved, rejected |
-| Entity density | +2 | 3+ named entities (people, places, organizations, tools) in decision or action fields |
+| Entity density | +2 | 3+ named entities (people, places, organizations, tools) in narrative text fields only |
 | Novel entities | +3 | Entities not yet present in MemPalace (check via `mempalace_search`) |
-| Correction or lesson | +4 | Content contains: mistake, lesson, learned, corrected, wrong, fixed, should have |
+| Correction or lesson | +4 | Content contains: mistake, lesson, learned, corrected, wrong, fixed, should have. **Only in narrative fields** — never from payload key names |
 | User-directed action | +3 | Journal records an action taken on behalf of or directed by the operator |
 | Emotional signal | +2 | Content contains: frustrated, impressed, surprised, disappointed, pleased, grateful |
 | Cross-skill reference | +2 | Journal references entities or decisions from a different skill's domain |
@@ -56,10 +76,12 @@ File as a KG triple when the journal contains:
 - An entity attribute worth tracking over time
 
 Use `mempalace_kg_add` with:
-- `subject`: the primary entity
+- `subject`: the primary entity (sanitize: no `/`, `#`, `:`, parentheses, brackets)
 - `predicate`: the relationship type (use snake_case verbs: works_on, uses, decided, prefers)
-- `object`: the related entity or value
+- `object`: the related entity or value (sanitize same as subject)
 - `valid_from`: the journal's timestamp
+
+**IMPORTANT**: KG triples must actually be written during Phase 4. Identifying triples during classification but only filing drawers silently loses relationship data.
 
 ### Elephas Signal (Chronicle promotion)
 
@@ -68,25 +90,7 @@ Emit a Signal when the journal contains:
 - A relationship between ontology-typed entities with confidence >= med
 - An entity not yet in Chronicle (check via `elephas.query` if available)
 
-Write the Signal to the `signal` payload field in Lucid's own dream journal entry. A single dream journal may carry multiple Signals. Use the Signal schema from spec-ocas-shared-schemas.md:
-
-```json
-{
-  "signal_id": "sig_{hash}",
-  "timestamp": "ISO 8601",
-  "source_skill": "ocas-lucid",
-  "source_journal_type": "Action",
-  "user_relevance": "user|agent_only",
-  "payload": {
-    "type": "Person|Place|Event|...",
-    "data": {}
-  },
-  "confidence": "high|med|low",
-  "status": "active"
-}
-```
-
-A single journal may produce both a MemPalace filing and an Elephas Signal if it contains both verbatim context worth preserving and a structured entity worth promoting.
+Write the Signal to the `signal` payload field in Lucid's own dream journal entry. A single dream journal may carry multiple Signals.
 
 ### Skip
 
@@ -116,16 +120,15 @@ Log the skip reason in `decisions.jsonl`. If score is 3-4, add to recirculation 
 | Custodian, Triage, Haiku, Bower | wing_system |
 | Lucid (own journals) | Do not file own journals to MemPalace |
 
+### Wing fallback
+
+**If `mempalace_list_wings` returns only `root`**, use `root/<wing_topic>` as the room name where `<wing_topic>` is the wing slug from the table above (e.g., `root/preferences`, `root/operations`, `root/evolution`). Do NOT attempt to create custom wings via MCP.
+
 ### Room selection (by content topic)
 
-Rooms are derived from the journal's content, not its source skill. Use the most specific room that applies:
-
-- Extract the primary topic from the journal's `decision.payload` or `decision.description`
-- Check if a room for that topic already exists via `mempalace_list_rooms` for the selected wing
-- If a matching room exists, file there
-- If no match, create a new room using a concise topic label (e.g., "auth-migration", "graphql-api", "quarterly-review")
-
-Prefer merging into existing rooms over creating near-duplicate rooms. When uncertain, check existing room names via `mempalace_get_taxonomy` before creating.
+- Extract the primary topic from the journal's narrative content (payload summary fields, not raw payload keys)
+- Check if a matching room name already exists via `mempalace_get_taxonomy`
+- Prefer merging into existing rooms over creating near-duplicate rooms
 
 ## Recirculation re-evaluation
 
@@ -134,16 +137,18 @@ When a recirculated journal is re-evaluated:
 1. Recompute relevance score using current state (new entities in MemPalace may boost novel entity signal)
 2. Check if the journal's key topics appear in journals filed since the original skip (cross-reference boost: +3 if topic appeared in 2+ subsequent filed journals)
 3. If new score >= file threshold: file normally, remove from recirculation queue
-4. If still below threshold: leave in queue for one more cycle. After 3 consecutive re-evaluations without promotion, archive from queue permanently
+4. If still below threshold: leave in queue for one more cycle. After 3 consecutive re-evaluations without promotion, archive from queue permanently (move to `removed_entries.jsonl`)
 
 ## Content extraction from journals
 
-Journals follow the JournalEntry schema. Extract filing content from these fields:
+Journals follow the JournalEntry schema. For **drawer filing content**, extract from these fields:
 
-- `decision.description` and `decision.payload`: primary content for classification and filing
-- `decision.reasoning_summary`: context for why the decision was made (high value for drawer filing)
-- `action.side_effect_intent`: what was done (useful for KG triples)
-- `metrics`: skip if this is the only substantive content
-- `okr_evaluation`: skip (Mentor's domain)
+- `decision.summary` / `decision.description`: primary narrative
+- `decision.reasoning_summary`: context for why the decision was made (high value)
+- `decision.payload` **values** (not keys): short string values can be included in drawer content
+- `action.side_effect_intent`: what was done
+- `urgent_issues[].summary` / `anomalies[].summary`: important signals
+
+For **scoring text** (classification), use ONLY the narrative fields listed in the "Content extraction for scoring" section above. Do NOT serialize the entire journal or payload dict keys.
 
 Do not file the full raw journal JSON as a drawer. Extract the meaningful narrative content and file that.

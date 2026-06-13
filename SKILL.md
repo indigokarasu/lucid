@@ -1,28 +1,44 @@
 ---
 name: ocas-lucid
-description: >
-  Nightly journal curator. Batch-processes OCAS skill journals into MemPalace's
-  verbatim store via MCP tools. Classifies each journal for filing as a MemPalace
-  drawer, MemPalace KG triple, Elephas Signal, or skip. Features re-emergence
-  detection, two-pass stale handling, change magnitude gates, hibernation
-  protection, and incremental cursor-based resumption.
-  Trigger: dream cycle, journal consolidation, MemPalace filing, memory curation,
-  "run lucid", "what did I dream", "journal curation", nightly batch.
-  NOT for real-time memory filing, skill evaluation, behavioral pattern detection,
-  or entity identity resolution.
+description: 'Nightly journal curator. Batch-processes OCAS skill journals via relevance
+  classification and writes curated content to journal files for the configured memory
+  provider to ingest. Classifies each journal for filing as a verbatim journal note,
+  structured entity/relationship data, or skip. Features re-emergence detection,
+  two-pass stale handling, change magnitude gates, hibernation protection,
+  and incremental cursor-based resumption. NOT for real-time memory filing,
+  skill evaluation, behavioral pattern detection, or entity identity resolution.'
 license: MIT
 source: https://github.com/indigokarasu/lucid
 includes:
-  - references/**
-  - scripts/**
+- references/**
+- scripts/**
 metadata:
-  author: Indigo Karasu
-  version: 2.0.2
+  author: Indigo Karasu (indigokarasu)
+  version: 3.0.0
+tags:
+- journal
+- curation
+- nightly
+- OCAS-core
+triggers:
+- nightly journal
+- journal curation
+- skill journal batch
+- curate journals
 ---
 
 # Lucid
 
-Nightly journal curator. Batch-processes journals from all OCAS skills into MemPalace's verbatim semantic store. Structured facts worth promoting to Chronicle are emitted as Signals to Elephas via the journal signal payload -- Lucid never writes to Chronicle or Weave directly.
+Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
+by relevance, and writes curated content to Lucid's journal files. The configured memory
+provider reads these journals during its ingestion cycle and decides what to persist.
+
+Lucid does NOT depend on any specific memory provider. It writes to
+`{agent_root}/commons/journals/ocas-lucid/` and lets the memory provider handle ingestion.
+
+## Interactive Menu
+
+When invoked interactively, present a two-level menu. See `references/interactive-menu.md` for the full menu structure.
 
 ## When to Use
 
@@ -43,7 +59,7 @@ Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG), relevance
 
 Lucid does not own: Chronicle writes (Elephas only), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
 
-Adjacent boundaries: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Mentor also reads journals but for OKR evaluation. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace.
+**Adjacent boundaries**: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace. When elephas is run manually (skill archived), update `config.json` cursor to include new elephas journal files to prevent lucid re-processing.
 
 ## Optional skill cooperation
 
@@ -145,44 +161,47 @@ Universal OKRs per `spec-ocas-journal.md`, plus skill-specific targets. See `ref
 | `lucid:dream` | cron | `0 3 * * *` (3am local) | `lucid.dream` |
 | `lucid:update` | cron | `0 0 * * *` (midnight daily) | `lucid.update` |
 
-See `references/platform-notes.md` for iteration budget, timeout behavior, and mid-run termination safety.
+See `references/cron-execution.md` for cron-specific execution patterns (heredoc Python, two-pass classification, degraded mode).
 
 ## Ontology mapping
 
 Lucid extracts no entities from user data directly. It classifies and routes journal content produced by other skills. When it emits Signals to Elephas, the Signal's `payload.type` reflects the entity type found in the source journal (Person, Place, Concept, etc.) per spec-ocas-ontology.md.
 
-## Self-update
+## Self-Update
 
-`lucid.update` pulls the latest package from the `source:` URL in this file's frontmatter. Runs silently — no output unless the version changed or an error occurred.
-
-1. Read `source:` from frontmatter → extract `{owner}/{repo}` from URL
-2. Read local version from SKILL.md frontmatter `metadata.version`
-3. Fetch remote version: `gh api "repos/{owner}/{repo}/contents/SKILL.md" --jq '.content' | base64 -d | grep 'version:' | head -1 | sed 's/.*"\(.*\)".*/\1/'`
-4. If remote version equals local version → stop silently
-5. Download and install:
-   ```bash
-   TMPDIR=$(mktemp -d)
-   gh api "repos/{owner}/{repo}/tarball/main" > "$TMPDIR/archive.tar.gz"
-   mkdir "$TMPDIR/extracted"
-   tar xzf "$TMPDIR/archive.tar.gz" -C "$TMPDIR/extracted" --strip-components=1
-   cp -R "$TMPDIR/extracted/"* ./
-   rm -rf "$TMPDIR"
-   ```
-6. On failure → retry once. If second attempt fails, report the error and stop.
-7. Output exactly: `I updated Lucid from version {old} to {new}`
+See `references/self-update-lucid.md`.
 
 ## Visibility
 
 public
 
-## Gotchas
+## Recirculation Queue `re_evaluations` Field
 
-See `references/gotchas.md` for all operational pitfalls including journal discovery, KG triple sanitization, null field handling, ingestion log format variance, cursor resumption, and recirculation queue edge cases.
+- **`re_evaluations` can be `null` (not 0)** in older queue entries. Always use `e.get('re_evaluations') or 0` when comparing. Direct `>= 3` comparison against `null` returns `False` in Python and silently skips cleanup.
+
+## Scoring Traps
+
+### Payload keys vs. narrative content
+
+The `correction_or_lesson(+4)` signal must ONLY fire on narrative text fields (`summary`, `description`, `reasoning_summary`). Do NOT count payload dictionary **key names** (like `lessons_extracted`) as content — this causes routine operational journals to score 6+ and get filed as noise. Apply keyword checks to the extracted narrative text only, not to the full serialized JSON.
+
+### MemPalace wing fallback
+
+`mempalace_list_wings` may return only `root` even though the classification taxonomy defines wings like `wing_research`, `wing_knowledge`, etc. When this happens, file into `root/<room>` where `<room>` is the wing's topic slug (e.g., `root/preferences`, `root/operations`, `root/evolution`). Do not attempt to create custom wings via MCP — it is not supported.
+
+### Always execute KG writes
+
+During Phase 4 (File), if the classification phase identified KG triples for a journal, you MUST call `mempalace_kg_add` for each triple. Filing only the drawer and silently skipping KG writes loses relationship data. The classification step identifies triples; the filing step must persist them.
+
+### Reference file resilience
+
+`references/dream-cycle.md`, `references/re-emergence.md`, `references/safety-gates.md`, and `references/dream-journal.md` may not exist on disk even though the Support File Map references them. When a reference file is missing, fall back to the procedural instructions in the SKILL.md body itself. Do not block the run.
 
 ## Support File Map
 
 | File | When to read |
 |------|-------------|
+| `references/cron-execution.md` | Before running any dream cycle in cron context. Contains the heredoc Python pattern, two-pass classification workflow, and degraded mode decision tree. |
 | `references/classification.md` | Before classifying any journal entry. Contains the relevance scoring model, filing taxonomy, wing/room assignment rules, and skip criteria. |
 | `references/dream-cycle.md` | Before executing the dream cycle. Phase-by-phase procedure (Orient, Gather, Classify, File), cursor tracking, and filing pitfalls. |
 | `references/re-emergence.md` | During post-file cleanup. Re-emergence detection (3+ threshold, auto-promotion) and two-pass stale handling. |
