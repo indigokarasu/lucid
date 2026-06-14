@@ -1,154 +1,95 @@
 # Classification Reference
 
-Relevance scoring model, filing taxonomy, and wing/room assignment rules for Lucid's journal classification phase.
+Relevance scoring model, filing taxonomy, wing/room assignment rules, and skip criteria for Lucid's dream cycle.
 
-## Relevance scoring
+## Scoring Rubric
 
-Each journal entry receives a numeric relevance score. The score determines filing vs skip.
+Each journal is scored by examining its **narrative text fields** (summary, description, reasoning_summary, findings, analysis, report) — NOT payload dictionary keys.
 
-### Content extraction for scoring
-
-**CRITICAL**: Before scoring, extract text ONLY from narrative fields. Do NOT serialize the entire journal JSON (including payload dictionary keys) into the search text, because payload key names like `lessons_extracted`, `events_recorded`, `signals_created` contain scoring-triggering words that are NOT narrative content.
-
-**COUNT-SUMMARY FALSE POSITIVE**: Journals that report ingest counts in their summary field (e.g., `"Ingest complete: 7 journals scanned, 1 new events, 9 new lessons, 0 shifts activated"`) contain the word "lessons" as a **metric count**, not as narrative about a lesson learned. The `correction_or_lesson(+4)` signal must NOT fire on these. Before applying the lesson signal, check whether the matched word appears in a count-summary context (pattern: `"N new lessons"`, `"N lessons"`, `"lessons: N"` at the start of a summary). If the surrounding text is purely numeric/metric, skip the signal. This applies equally to "events", "shifts", and other payload-key words that may appear in count summaries.
-
-**Narrative fields to extract** (in priority order):
-1. `decision.summary` / `decision.description`
-2. `decision.reasoning_summary`
-3. `action.side_effect_intent`
-4. `action.reason`
-5. `urgent_issues[].summary`
-6. `anomalies[].summary`
-
-**Do NOT use for scoring**:
-- `decision.payload` dictionary **keys** (values are OK if they are short strings, but keys like `lessons_extracted` will false-trigger)
-- `metrics` fields (pure numbers)
-- `okr_evaluation` fields (Mentor's domain)
-- `entities_observed`, `relationships_observed`, `preferences_observed` (structured data, not narrative)
-
-### Scoring signals (additive)
-
-| Signal | Points | Detection |
+| Signal | Points | Condition |
 |--------|--------|-----------|
-| Decision keywords | +3 | Content contains: decided, confirmed, agreed, resolved, committed, approved, rejected |
-| Entity density | +2 | 3+ named entities (people, places, organizations, tools) in narrative text fields only |
-| Novel entities | +3 | Entities not yet present in MemPalace (check via `mempalace_search`) |
-| Correction or lesson | +4 | Content contains: mistake, lesson, learned, corrected, wrong, fixed, should have. **Only in narrative fields** — never from payload key names |
-| User-directed action | +3 | Journal records an action taken on behalf of or directed by the operator |
-| Emotional signal | +2 | Content contains: frustrated, impressed, surprised, disappointed, pleased, grateful |
-| Cross-skill reference | +2 | Journal references entities or decisions from a different skill's domain |
-| Relationship signal | +3 | Content describes a relationship between people, or between a person and a project/organization |
+| `correction_or_lesson` | +4 | Narrative contains lesson/learning language: "learned", "correction", "mistake", "improvement", "should have", "could have", "better approach", "next time", "avoid", "fix", "resolved", "solution", "workaround" |
+| `decision_keywords` | +3 | Narrative contains decision language: "decided", "decision", "chose", "selected", "determined", "conclusion", "recommend", "adopt", "approved", "rejected", "prefer", "opt for", "go with" |
+| `entity_density` | +2 | Journal contains structured entity data: `entities_observed`, `persons_upserted`, `relationships_discovered`, `identities_merged` fields present |
+| `blocker_context` | +2 | Narrative describes blockers/issues with context: "blocked", "blocker", "error", "failed", "failure", "issue", "problem", "unavailable", "exhaustion", "limit", "rate limit", "429", "timeout", "crash" AND has meaningful narrative (>200 chars) |
+| `cross_skill` | +2 | Narrative references cross-skill coordination: "cross-skill", "integration", "coordinated", "multiple skill", "skill cooperation", "inter-skill", "between skills" |
+| `adaptations` | +2 | Narrative describes local adaptations/customizations: "local_adaptation", "adapted", "customized", "modified", "preserved", "conflict_resolution", "merge conflict" |
+| `user_directed` | +3 | Journal type is "Action" or "Interaction" (user-initiated) |
+| `artifacts` | +1 | Journal has substantial narrative content (>500 chars) with meaningful text |
 
-### Scoring penalties (subtractive)
+## Filing Thresholds
 
-| Signal | Points | Detection |
-|--------|--------|-----------|
-| Pure metrics | -3 | Journal contains only numeric metrics with no narrative content in decision field |
-| Routine health check | -4 | Source skill is ocas-custodian and event_type is routine health check |
-| Duplicate content | -5 | `mempalace_check_duplicate` returns a match above 0.9 similarity |
+| Score | Filing Action |
+|-------|---------------|
+| ≥ 5 | **file** — write to MemPalace drawers + KG |
+| 3–4 | **recirculate** — add to recirculation queue for re-evaluation |
+| ≤ 2 | **skip** — no filing, cursor advances only |
 
-### Thresholds
+## Pure Metrics Skip (Early Exit)
 
-- Score >= 5: file (MemPalace drawer, KG, or Elephas Signal depending on content type)
-- Score 3-4: skip with recirculation (add to recirculation queue for re-evaluation in 7 days)
-- Score <= 2: skip without recirculation
+Journals with **no narrative** AND **text length < 300 chars** receive `-3` (`pure_metrics`) and are skipped immediately. This catches routine heartbeat/light-scan journals.
 
-Thresholds are configurable in `config.json` under `classification.file_threshold` and `classification.recirculate_threshold`.
+## Wing Assignment
 
-## Filing taxonomy
+Maps skill → MemPalace wing (falls back to `root/<room>` if custom wings unavailable):
 
-### MemPalace drawer (verbatim filing)
+| Skill | Wing | Room (topic slug) |
+|-------|------|-------------------|
+| ocas-custodian, custodian | system | operations |
+| ocas-mentor, ocas-finch, ocas-forge, ocas-praxis | evolution | evolution |
+| ocas-scout, ocas-rally, ocas-sift, ocas-reach | research | research |
+| ocas-dispatch, ocas-haiku, ocas-weave, ocas-spot, ocas-vesper | operations | operations |
+| ocas-sands, ocas-voyage, ocas-look, ocas-taste | preferences | preferences |
+| ocas-elephas, ocas-corvus, corvus | knowledge | knowledge |
+| ocas-bower, ocas-expansion, ocas-bones | operations | operations |
 
-File as a drawer when the journal contains:
-- Session reasoning, tradeoffs, or context that explains *why* a decision was made
-- Multi-step workflow narrative (not just the outcome, but the process)
-- Conversation content worth retrieving verbatim in future sessions
-- Research findings with sources and analysis
-- Lessons learned with enough context to be useful later
+## Skip Criteria (Auto-Skip Regardless of Score)
 
-Drawer content is the full journal entry or a relevant extract. Do not summarize -- MemPalace's value is verbatim retrieval.
+- Pure metrics/heartbeat journals (early exit above)
+- Journal type "Observation" with no entities, no lessons, no decisions, no blockers
+- Self-update journals with only version bump (no adaptations preserved)
+- Routine sync journals (Spotify sync, calendar scan) with only success/failure status
 
-### MemPalace KG (relationship filing)
+## Classification Algorithm (Two-Pass)
 
-File as a KG triple when the journal contains:
-- A factual relationship between entities (person works_on project, tool uses_model X)
-- A temporal state change (project completed, role changed, preference updated)
-- An entity attribute worth tracking over time
+### Pass 1: Narrative Extraction
+```python
+def extract_narrative(journal):
+    # Check narrative fields only — NOT payload keys
+    narrative_fields = ["summary", "description", "reasoning_summary", 
+                        "findings", "analysis", "report", "notes", "text", "content"]
+    parts = []
+    for field in narrative_fields:
+        val = journal.get(field)
+        if isinstance(val, str) and len(val) > 10:
+            parts.append(val)
+    return " ".join(parts)[:3000]
+```
 
-Use `mempalace_kg_add` with:
-- `subject`: the primary entity (sanitize: no `/`, `#`, `:`, parentheses, brackets)
-- `predicate`: the relationship type (use snake_case verbs: works_on, uses, decided, prefers)
-- `object`: the related entity or value (sanitize same as subject)
-- `valid_from`: the journal's timestamp
+### Pass 2: Signal Detection
+Apply keyword checks to **extracted narrative text only** (lowercased). Never count payload key names like `lessons_extracted` as signal triggers.
 
-**IMPORTANT**: KG triples must actually be written during Phase 4. Identifying triples during classification but only filing drawers silently loses relationship data.
+## Edge Cases Handled
 
-### Elephas Signal (Chronicle promotion)
+- **Elephas deep consolidation journals**: Have `identities_merged`, `relates_created` → entity_density(+2). Often pure metrics otherwise → skip unless lessons/decisions present.
+- **Vesper briefings**: Have decisions sections + entity data → typically score 8+ (file).
+- **Scout/Sift expansion journals**: Often have entity data + blocker context (API limits) → score 5 (file).
+- **Weave upsert journals**: Entity data only → score 3 (recirculate) unless cross-skill issue present.
+- **Haiku content reviews**: Blocker context only → score 3 (recirculate).
+- **Dispatch triage/draft journals**: Routine operational → skip (score 0 or -3).
 
-Emit a Signal when the journal contains:
-- A structured entity meeting the ontology types in spec-ocas-ontology.md (Person, Place, Event, etc.)
-- A relationship between ontology-typed entities with confidence >= med
-- An entity not yet in Chronicle (check via `elephas.query` if available)
+## Re-circulation Queue
 
-Write the Signal to the `signal` payload field in Lucid's own dream journal entry. A single dream journal may carry multiple Signals.
+Entries added with:
+```json
+{
+  "skill": "...",
+  "run_id": "...",
+  "journal": "...",
+  "added_at": "...",
+  "score": 3,
+  "reason": "Score in recirculation range (3-4): signal1(+N), signal2(+M)"
+}
+```
 
-### Skip
-
-Skip when the journal contains:
-- Routine operational metrics with no narrative (latency, retry counts, token usage only)
-- Health check confirmations with no anomalies
-- Content already filed in MemPalace (duplicate check positive)
-- Content with insufficient context to be useful in isolation
-
-Log the skip reason in `decisions.jsonl`. If score is 3-4, add to recirculation queue.
-
-## Wing and room assignment
-
-### Wing selection (by source skill domain)
-
-| Source skill domain | Wing |
-|---------------------|------|
-| Scout, Sift, Look | wing_research |
-| Elephas, Weave | wing_knowledge |
-| Praxis, Dispatch | wing_operations |
-| Voyage, Spot, Sands | wing_logistics |
-| Rally | wing_portfolio |
-| Taste | wing_preferences |
-| Corvus, Thread | wing_patterns |
-| Mentor, Forge, Fellow | wing_evolution |
-| Vesper | wing_briefings |
-| Custodian, Triage, Haiku, Bower | wing_system |
-| Lucid (own journals) | Do not file own journals to MemPalace |
-
-### Wing fallback
-
-**If `mempalace_list_wings` returns only `root`**, use `root/<wing_topic>` as the room name where `<wing_topic>` is the wing slug from the table above (e.g., `root/preferences`, `root/operations`, `root/evolution`). Do NOT attempt to create custom wings via MCP.
-
-### Room selection (by content topic)
-
-- Extract the primary topic from the journal's narrative content (payload summary fields, not raw payload keys)
-- Check if a matching room name already exists via `mempalace_get_taxonomy`
-- Prefer merging into existing rooms over creating near-duplicate rooms
-
-## Recirculation re-evaluation
-
-When a recirculated journal is re-evaluated:
-
-1. Recompute relevance score using current state (new entities in MemPalace may boost novel entity signal)
-2. Check if the journal's key topics appear in journals filed since the original skip (cross-reference boost: +3 if topic appeared in 2+ subsequent filed journals)
-3. If new score >= file threshold: file normally, remove from recirculation queue
-4. If still below threshold: leave in queue for one more cycle. After 3 consecutive re-evaluations without promotion, archive from queue permanently (move to `removed_entries.jsonl`)
-
-## Content extraction from journals
-
-Journals follow the JournalEntry schema. For **drawer filing content**, extract from these fields:
-
-- `decision.summary` / `decision.description`: primary narrative
-- `decision.reasoning_summary`: context for why the decision was made (high value)
-- `decision.payload` **values** (not keys): short string values can be included in drawer content
-- `action.side_effect_intent`: what was done
-- `urgent_issues[].summary` / `anomalies[].summary`: important signals
-
-For **scoring text** (classification), use ONLY the narrative fields listed in the "Content extraction for scoring" section above. Do NOT serialize the entire journal or payload dict keys.
-
-Do not file the full raw journal JSON as a drawer. Extract the meaningful narrative content and file that.
+`re_evaluations` field defaults to 0. Use `e.get('re_evaluations') or 0` — older entries may have `null`.

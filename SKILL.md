@@ -15,16 +15,6 @@ includes:
 metadata:
   author: Indigo Karasu (indigokarasu)
   version: 3.0.0
-tags:
-- journal
-- curation
-- nightly
-- OCAS-core
-triggers:
-- nightly journal
-- journal curation
-- skill journal batch
-- curate journals
 ---
 
 # Lucid
@@ -57,7 +47,7 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG), relevance classification, weak signal recirculation, re-emergence detection.
 
-Lucid does not own: Chronicle writes (Elephas only), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
+Lucid does not own: Chronicle writes (use the elephas-chronicle bridge pattern from the memory-system-design skill), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
 
 **Adjacent boundaries**: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace. When elephas is run manually (skill archived), update `config.json` cursor to include new elephas journal files to prevent lucid re-processing.
 

@@ -120,6 +120,12 @@
 
 When classifying, walk a **search-order list** of possible narrative locations rather than assuming the standard JournalEntry schema. Extract from: (1) `decision.summary`, `decision.reasoning_summary`, `decision.description`, (2) `summary` (top-level), (3) `rationale`, (4) `findings.*.description`, (5) `results.*.note`, (6) `events_observed[]`, (7) `decision` if it's a plain string. Stop at the first set of fields that yields >20 chars of narrative.
 
+## Skill Self-Update Merge Conflicts
+
+- **`git stash pop` after `git pull` can produce conflicts** when local modifications overlap with remote changes. The stash is "theirs" and the pulled commit is "ours" — this is counterintuitive. Use `git checkout --theirs <file>` to keep the local (stash) version, `git checkout --ours <file>` to keep the remote version.
+- **Untracked files block merge**: Before pulling, check for untracked files that would conflict with incoming tracked files (`git status`). Remove them with `rm -f` before `git pull`, or the merge will abort with "untracked working tree files would be overwritten by merge."
+- **After resolving conflicts**: Stage with `git add -A`, then `git commit` with a descriptive message. Drop the stash with `git stash drop` only after the merge commit is complete.
+
 ## Backlog Management
 
 - **Backlog can grow very large** (5000+ unprocessed journals). The catch-up cap of 40 journals/run means clearing a large backlog takes 125+ runs. Prioritize quality over quantity — a correct classification that skips 40 noise journals is more valuable than a rushed one that files noise.
