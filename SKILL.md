@@ -49,7 +49,11 @@ Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG), relevance
 
 Lucid does not own: Chronicle writes (use the elephas-chronicle bridge pattern from the memory-system-design skill), social graph updates (Weave only), real-time pattern analysis (Corvus), skill performance evaluation (Mentor).
 
-**Adjacent boundaries**: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace. When elephas is run manually (skill archived), update `config.json` cursor to include new elephas journal files to prevent lucid re-processing.
+## Adjacent boundaries**: Elephas also reads journals but for structured entity extraction and Chronicle promotion. Lucid reads journals for verbatim preservation and semantic searchability via MemPalace. When elephas is run manually (skill archived), update `config.json` cursor to include new elephas journal files to prevent lucid re-processing.
+
+**Elephas pipeline as Lucid input source**: The canonical `elephas_cron_run.py` writes run journals to `/root/commons/journals/ocas-elephas/` which is NOT in Lucid's scan path. However, other OCAS skills' journals (mentor, vesper, scout) that Elephas reads from the shared `/root/commons/journals/` path ARE in Lucid's scope. When running elephas directly (not via the `ocas-elephas` skill), see `references/elephas-pipeline-gotchas.md` for the expected unprocessed residual pattern and the nested entity extraction gap.
+
+**Elephas JSON parse errors**: The `elephas_cron_pipeline.py` skips ~43% of `mentor-light-*` files due to malformed JSON (trailing commas, unescaped newlines in `notes` fields). This is a producer-side bug in `ocas-mentor`, NOT an elephas pipeline bug. Lucid handles this gracefully via try/except. See `references/elephas-pipeline-json-errors.md` for the full error pattern, root cause, and recommended non-mitigation.
 
 ## Optional skill cooperation
 
@@ -179,9 +183,13 @@ The `correction_or_lesson(+4)` signal must ONLY fire on narrative text fields (`
 
 `mempalace_list_wings` may return only `root` even though the classification taxonomy defines wings like `wing_research`, `wing_knowledge`, etc. When this happens, file into `root/<room>` where `<room>` is the wing's topic slug (e.g., `root/preferences`, `root/operations`, `root/evolution`). Do not attempt to create custom wings via MCP — it is not supported.
 
-### Always execute KG writes
+### When interesting journals are buried under scan backlog
 
-During Phase 4 (File), if the classification phase identified KG triples for a journal, you MUST call `mempalace_kg_add` for each triple. Filing only the drawer and silently skipping KG writes loses relationship data. The classification step identifies triples; the filing step must persist them.
+If the cursor is deep into a scan-heavy region (e.g., 2000+ unprocessed, mostly mentor light scans), the standard 40-journal batch will process zero interesting journals. **Mitigation**: Run a targeted pass that collects unprocessed journals only from high-signal skills (vesper, praxis, taste, custodian, dispatch) and processes those first. This ensures the cursor advances through scans *and* interesting signals get filed in the same session. See `references/classification.md` Pass 1 for the narrative extraction improvements needed to correctly score these journals.
+
+### Narrative extraction must handle nested structures
+
+The top-level-only narrative extraction in the original template misses ~80% of vesper content (`decision.reasoning_summary`, `decision.payload.entities_observed`, `run_identity.journal_type`) and ~60% of custodian findings (`findings[].diagnosis`). The classification reference (`references/classification.md`) now includes the correct multi-path extraction. **Always use the updated extraction, not the simplified top-level version.**
 
 ### Reference file resilience
 
@@ -199,3 +207,49 @@ During Phase 4 (File), if the classification phase identified KG triples for a j
 | `references/dream-journal.md` | When writing the dream journal. Full output schema (counts, events, Signal payload, skip path). |
 | `references/okr.md` | During OKR evaluation. Skill-specific targets for ingestion coverage, duplicate avoidance, recirculation, Signal precision, schedule adherence, data integrity. |
 | `references/gotchas.md` | Before any dream cycle run. Operational pitfalls for journal discovery, KG triples, null fields, ingestion log formats, cursor resumption, and recirculation queue. |
+| `references/elephas-pipeline-gotchas.md` | Before running the elephas cron pipeline directly (when the `ocas-elephas` skill is not found). Contains the list entity crash bug fix, bridge dependency, cursor update procedure, expected unprocessed residuals, nested entity extraction gap, and script path. |
+| `references/elephas-pipeline-json-errors.md` | When elephas reports high JSON parse error rates on journal files. Contains the full error pattern, root cause (mentor malformed JSON), impact analysis, and recommended non-mitigation. |
+| `references/bridge-health-check.md` | Before running any pipeline that depends on LadybugDB (elephas, deep scan). Health check, restart procedure for cron/terminal mode, and env var reference. |
+| `scripts/lucid_dream_template.py` | Reference implementation of the dream cycle script. Copy to `/tmp/` and adapt rather than writing from scratch. Uses `pathlib`, skill-level scan exceptions, priority sorting, and produces `file`-key ingestion log entries compatible with cursor resumption. |
+
+## Cron Execution Pattern
+
+> **Critical**: `execute_code` is **blocked** in cron mode. Use `write_file` to write a Python script to `/tmp/`, then invoke it via `terminal(command="python3 /tmp/script.py")`.
+
+### Multi-Batch Processing (for large backlogs)
+
+When the journal backlog exceeds ~500 files (common), a single 40-journal batch will be entirely consumed by scan files. **Mitigation**: Set `BATCH_SIZE = 200` in the template script to process 5× more journals per run. This clears scan backlogs faster and reaches interesting signals (vesper, praxis, taste) sooner.
+
+The template script (`scripts/lucid_dream_template.py`) now defaults to 200 journals per run.
+
+### Two-Pass Classification Workflow
+
+**First run (no cursor)**: Alphabetical sorting places scan/sweep journals (forge, finch, custodian) before interesting journals (mentor, praxis, dispatch, vesper, taste). A 40-journal cap means the first batch may be *entirely* scan files.
+
+**Mitigation for first run**:
+1. Separate journals into "interesting" and "scan" using `is_scan()` with **skill-level exceptions** (see `references/gotchas.md` — `mentor-light`, `vesper`, `taste`, `praxis-review`, `dispatch-triage` are NEVER scans)
+2. Sort interesting journals by **skill priority** (mentor=0, vesper=1, praxis=2, taste=3, dispatch=4, spot=5, forge=6, custodian=7) — NOT alphabetically
+3. Process interesting journals first (up to cap of 40)
+4. Track both groups in the cursor — remaining scans are processed in subsequent runs
+
+**Subsequent runs**: Resume from cursor, process next batch. Once all interesting journals are processed, move to scan batches.
+
+### Journal Priority Heuristic
+
+Skills with high-scan volume (forge, finch, custodian, spot) produce mostly operational noise. The interesting signals concentrate in:
+- **ocas-mentor**: evaluation coverage, behavioral corrections in `notes` field
+- **ocas-praxis**: `praxis-review-*` and `praxis-debrief*` filenames; `r_*` runs with `reasoning_summary` or `notes`
+- **ocas-dispatch**: `dispatch-triage-*` and `dispatch-draft-*` filenames; `reasoning_summary` in decision block
+- **ocas-vesper**: `*morning*` and `*evening*` briefings; `notes` field
+- **ocas-taste**: consumption pattern records
+- **ocas-custodian/light-***: Starting ~June 14, these contain lesson/blocker content (scores 6-7) — NOT pure scans
+
+Skills with almost exclusively scan content (skip unless cap allows):
+- ocas-forge (`journal-scan-*`, `r_*` numeric), ocas-finch (`scan-*`, `daily-*`, `weekly-*`), ocas-spot (`sweep-*`, `spot-watch-*`), ocas-custodian (`deep-scan-*`, `light-scan-*`)
+
+### Degraded Mode Decision Tree
+
+1. Check MemPalace availability via `mempalace_status`
+2. **If unavailable**: Log `degraded: mempalace` in evidence, skip `mempalace_add_drawer`/`mempalace_kg_add` calls, write all other records (decisions, ingestion log, dream journal) normally
+3. **If available but error on individual call**: Log the specific error, queue for retry in next run, continue with remaining journals
+4. Never block the dream cycle on MemPalace — it is a write-side dependency, not a read-side one

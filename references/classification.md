@@ -53,20 +53,96 @@ Maps skill → MemPalace wing (falls back to `root/<room>` if custom wings unava
 ## Classification Algorithm (Two-Pass)
 
 ### Pass 1: Narrative Extraction
+
 ```python
-def extract_narrative(journal):
-    # Check narrative fields only — NOT payload keys
-    narrative_fields = ["summary", "description", "reasoning_summary", 
+def extract_narrative(journal, filepath):
+    narrative_fields = ["summary", "description", "reasoning_summary",
                         "findings", "analysis", "report", "notes", "text", "content"]
     parts = []
     for field in narrative_fields:
         val = journal.get(field)
         if isinstance(val, str) and len(val) > 10:
             parts.append(val)
+        elif isinstance(val, list):
+            # Handle findings array (custodian, etc.)
+            for item in val:
+                if isinstance(item, dict):
+                    for k in ["diagnosis", "summary", "description", "notes", "text"]:
+                        v = item.get(k)
+                        if isinstance(v, str) and len(v) > 10:
+                            parts.append(v)
+
+    # Vesper: nested decision.reasoning_summary
+    decision = journal.get("decision", {})
+    if isinstance(decision, dict):
+        rs = decision.get("reasoning_summary", "")
+        if rs and isinstance(rs, str) and len(rs) > 10:
+            parts.append(rs)
+
+    # Vesper: entities in decision.payload.entities_observed
+    # (handled separately in extract_entities — skip here to avoid scope issues)
+
+    # Dispatch: content.decision.reasoning_summary
+    content = journal.get("content", {})
+    if isinstance(content, dict):
+        d = content.get("decision", {})
+        if isinstance(d, dict):
+            rs = d.get("reasoning_summary", "")
+            if rs and isinstance(rs, str) and len(rs) > 10:
+                parts.append(rs)
+
     return " ".join(parts)[:3000]
 ```
 
+**CRITICAL**: The basic top-level-only extraction misses ~80% of vesper narrative content and ~60% of custodian findings. Always implement the nested extraction paths above.
+
+### Pass 1b: Entity Extraction
+
+```python
+def extract_entities(journal, filepath):
+    entities = []
+    # Top-level entities_observed (string or dict format)
+    for eo in journal.get("entities_observed", []):
+        if isinstance(eo, str):
+            entities.append({"name": eo, "type": "unknown"})
+        elif isinstance(eo, dict):
+            name = eo.get("name", eo.get("label", ""))
+            if name:
+                entities.append({"name": name, "type": eo.get("type", "unknown")})
+    # Vesper nested entities
+    decision = journal.get("decision", {})
+    if isinstance(decision, dict):
+        payload = decision.get("payload", {})
+        if isinstance(payload, dict):
+            for eo in payload.get("entities_observed", []):
+                if isinstance(eo, dict):
+                    name = eo.get("name", eo.get("label", ""))
+                    if name:
+                        entities.append({"name": name, "type": eo.get("type", "unknown")})
+    return entities
+```
+
+### Pass 1c: Journal Type Detection
+
+```python
+def get_journal_type(journal):
+    # Direct fields
+    jtype = journal.get("journal_type", journal.get("type", ""))
+    if jtype in ("Action", "Interaction", "action"):
+        return jtype
+    # Vesper: nested run_identity.journal_type
+    ri = journal.get("run_identity", {})
+    if isinstance(ri, dict):
+        ri_type = ri.get("journal_type", "")
+        if ri_type in ("action", "Action"):
+            return "Action"
+    return ""
+```
+
+**Note on mentor journals**: `ocas-mentor` light journals use `heartbeat_type` (value `"light"`) instead of `journal_type`. These are routine operational records — the `user_directed` signal should NOT fire on them. The `get_journal_type()` function above correctly returns `""` for these.
+
 ### Pass 2: Signal Detection
+
 Apply keyword checks to **extracted narrative text only** (lowercased). Never count payload key names like `lessons_extracted` as signal triggers.
 
 ## Edge Cases Handled
