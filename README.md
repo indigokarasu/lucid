@@ -1,7 +1,7 @@
 # lucid
 
 <p align="center">
-<img src="./assets/readme/hero.svg" width="100%" alt="Lucid: nightly journal curator — batch-processes skill journals into MemPalace's verifiable memory store.">
+<img src="./assets/readme/hero.jpg" width="100%" alt="Lucid: nightly journal curator — batch-processes skill journals into MemPalace's verifiable memory store.">
 </p>
 
 lucid — Lucid: nightly journal curator — batch-processes skill journals into MemPalace's verifiable memory store.
