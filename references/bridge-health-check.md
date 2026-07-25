@@ -61,7 +61,7 @@ curl -s http://127.0.0.1:9192/health
     && mkdir -p /tmp/liblbug-v0171 && cd /tmp/liblbug-v0171 && tar xzf /tmp/liblbug-linux-x86_64.tar.gz
   ```
 - The bridge uses the DB path it was started with. The active DB is `<hermes-home>/commons/db/ocas-elephas/chronicle.lbug` (or `<hermes-home>/profiles/indigo/commons/db/ocas-elephas/chronicle.lbug` in profile-scoped deployments).
-- The path `/root/commons/db/ocas-elephas/chronicle.lbug` is a **stale/legacy copy** — do NOT point the bridge at it.
+- The path `<commons>/db/ocas-elephas/chronicle.lbug` is a **stale/legacy copy** — do NOT point the bridge at it.
 - Verify which DB path the bridge is using: `ps aux | grep ladybug_bridge | grep -v grep`
 
 ## Failure Mode
