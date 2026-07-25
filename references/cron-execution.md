@@ -92,10 +92,17 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 
 | Path | Status |
 |------|--------|
+<<<<<<< Updated upstream
 | `<hermes-home>/commons/data/ocas-lucid/config.json` | Active cron data dir (write target) |
 | `<hermes-home>/profiles/indigo/commons/data/ocas-lucid/config.json` | Profile-specific config (may be authoritative) |
 | `<commons>/data/ocas-lucid/config.json` | Stale copy — DO NOT WRITE TO THIS |
 | `<repo-root>/commons/data/ocas-lucid/config.json` | Repo copy — stale |
+=======
+| `~/.hermes/commons/data/ocas-lucid/config.json` | Active cron data dir (write target) |
+| `~/.hermes/profiles/indigo/commons/data/ocas-lucid/config.json` | Profile-specific config (may be authoritative) |
+| `<fs-root>/commons/data/ocas-lucid/config.json` | Stale copy — DO NOT WRITE TO THIS |
+| `<fs-root>/indigo-repo/commons/data/ocas-lucid/config.json` | Repo copy — stale |
+>>>>>>> Stashed changes
 
 **Rule**: Before writing the dream cycle script, identify the active config. Check which one has the highest `streak` value — that's the config the cron job has been incrementing, and the one your script must read/write.
 
@@ -104,19 +111,31 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 2. Use the path with the highest `streak` as the active config
 3. After writing, re-read the same path to confirm cursor/stats updated correctly
 
+<<<<<<< Updated upstream
 **Never** hardcode `<hermes-home>/commons/` or `<commons>/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
+=======
+**Never** hardcode `~/.hermes/commons/` or `<fs-root>/commons/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
+>>>>>>> Stashed changes
 
 ## Path Expansion Pitfall (CRITICAL)
 
 When reading `config.json` fields like `source_journals_path` or `lucid_journals_path`, the values often contain `~` (e.g., `~/.hermes/commons/journals`). These do NOT auto-expand in Python's `open()`, `os.path.exists()`, or `os.makedirs()`.
 
+<<<<<<< Updated upstream
 **Bug**: `open(config['source_journals_path'])` → `FileNotFoundError: [Errno 2] No such file or found: '<hermes-home>/profiles/indigo/home/.hermes/commons/journals'`
+=======
+**Bug**: `open(config['source_journals_path'])` → `FileNotFoundError: [Errno 2] No such file or found: '~/.hermes/profiles/indigo/home/.hermes/commons/journals'`
+>>>>>>> Stashed changes
 
 The `~` is treated as a literal directory component rather than expanding to `/root`.
 
 **Fix**: Always call `os.path.expanduser()` on every path read from config:
 ```python
+<<<<<<< Updated upstream
 JOURNALS_DIR_PATH = os.path.expanduser(config.get('source_journals_path', '<hermes-home>/commons/journals'))
+=======
+JOURNALS_DIR_PATH = os.path.expanduser(config.get('source_journals_path', '~/.hermes/commons/journals'))
+>>>>>>> Stashed changes
 ```
 
 Even fallback defaults should use absolute paths or be expanded. This applies to ALL config-path fields: `ingestion_log_path`, `decisions_path`, `journals_path`, `source_journals_path`, `lucid_journals_path`.
@@ -136,8 +155,13 @@ When MemPalace MCP tools are not registered (common in cron/CLI environments), t
 
 | Database | Path | Tables |
 |----------|------|--------|
+<<<<<<< Updated upstream
 | Knowledge Graph | `<mempalace>/palace/knowledge_graph.sqlite3` | `entities`, `triples` |
 | ChromaDB | `<mempalace>/palace/chroma.sqlite3` | `collections`, `embeddings`, etc. |
+=======
+| Knowledge Graph | `<fs-root>/.mempalace/palace/knowledge_graph.sqlite3` | `entities`, `triples` |
+| ChromaDB | `<fs-root>/.mempalace/palace/chroma.sqlite3` | `collections`, `embeddings`, etc. |
+>>>>>>> Stashed changes
 
 **Entity schema**: `(id TEXT PK, name TEXT, type TEXT, properties TEXT, created_at TEXT)`
 **Triple schema**: `(id TEXT PK, subject TEXT, predicate TEXT, object TEXT, valid_from TEXT, valid_to TEXT, confidence REAL, source_closet TEXT, source_file TEXT, extracted_at TEXT)`
@@ -147,7 +171,11 @@ Minimal filing example:
 import sqlite3, uuid, json
 
 def file_to_kg(entities, rel_path, skill, room):
+<<<<<<< Updated upstream
     conn = sqlite3.connect("<mempalace>/palace/knowledge_graph.sqlite3")
+=======
+    conn = sqlite3.connect("<fs-root>/.mempalace/palace/knowledge_graph.sqlite3")
+>>>>>>> Stashed changes
     c = conn.cursor()
     for ent in entities:
         eid = ent["name"].lower().replace(" ", "_")[:40]
@@ -210,6 +238,10 @@ When invoked as `elephas.ingest.journals then elephas.consolidate.immediate`, th
 
 The two pipelines are independent but operate on the same input data. Key observations:
 - Elephas's `elephas_cron_pipeline.py` uses LadybugDB (`lb.configure("chronicle")`) — requires the LadybugDB service running on port 9192
+<<<<<<< Updated upstream
 - Elephas writes its run journals to `<hermes-home>/commons/journals/ocas-elephas/YYYY-MM-DD/` — these are excluded from Lucid's scan path
+=======
+- Elephas writes its run journals to `~/.hermes/commons/journals/ocas-elephas/YYYY-MM-DD/` — these are excluded from Lucid's scan path
+>>>>>>> Stashed changes
 - JSON parse errors in source journals (especially `mentor-light-*` files) cause silent skips in elephas — see `references/elephas-pipeline-json-errors.md`
 - The elephas pipeline's DEBUG stdout output is expected and harmless in cron context
