@@ -36,4 +36,4 @@ When `git stash pop` produces conflict markers:
 ## Known gotchas
 
 - **Untracked files blocking merge**: If the stash tracked files that were previously untracked, the merge may abort with "untracked working tree files would be overwritten". Remove those untracked files first with `rm -f` or `git checkout -- .`.
-- **read_file path resolution**: The `read_file` tool may fail with "File not found" for absolute profile paths (e.g., `/root/.hermes/skills/ocas-lucid/references/foo.md`). Use `read_file` with the expanded `~` path (`~/.hermes/profiles/indigo/skills/ocas-lucid/references/foo.md`) or fall back to `terminal(head <path>)`.
+- **read_file path resolution**: The `read_file` tool may fail with "File not found" for absolute profile paths (e.g., `<hermes-home>/skills/ocas-lucid/references/foo.md`). Use `read_file` with the expanded `~` path (`~/.hermes/profiles/indigo/skills/ocas-lucid/references/foo.md`) or fall back to `terminal(head <path>)`.

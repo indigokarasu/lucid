@@ -40,7 +40,7 @@ The `ocas-mentor` skill writes journal files using `json.dump()` but some fields
 
 When running elephas pipeline and observing >20% parse error rate:
 1. Sample 2-3 of the skipped files to confirm the error pattern
-2. Report to owner that `ocas-mentor` is producing malformed JSON (this is a mentor skill bug, not an elephas bug)
+2. Report to <operator> that `ocas-mentor` is producing malformed JSON (this is a mentor skill bug, not an elephas bug)
 3. Do NOT attempt to fix the JSON files in-place — this corrupts the source data for other consumers
 4. The pipeline's graceful skip behavior is correct; the fix belongs in the producer (mentor skill)
 
@@ -49,7 +49,7 @@ When running elephas pipeline and observing >20% parse error rate:
 The `elephas_cron_pipeline.py` prints extensive `DEBUG:` lines to stdout:
 ```
 DEBUG: Decision log written
-DEBUG: journal_dir = /root/.hermes/commons/journals/ocas-elephas/2026-06-19
+DEBUG: journal_dir = <hermes-home>/commons/journals/ocas-elephas/2026-06-19
 DEBUG: journal_dir created/exists
 DEBUG: journal_path = ...
 DEBUG: journal_path.exists() before = False

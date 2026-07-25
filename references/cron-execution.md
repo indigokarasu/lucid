@@ -92,8 +92,8 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 
 | Path | Status |
 |------|--------|
-| `/root/.hermes/commons/data/ocas-lucid/config.json` | Active cron data dir (write target) |
-| `/root/.hermes/profiles/indigo/commons/data/ocas-lucid/config.json` | Profile-specific config (may be authoritative) |
+| `<hermes-home>/commons/data/ocas-lucid/config.json` | Active cron data dir (write target) |
+| `<hermes-home>/profiles/indigo/commons/data/ocas-lucid/config.json` | Profile-specific config (may be authoritative) |
 | `/root/commons/data/ocas-lucid/config.json` | Stale copy — DO NOT WRITE TO THIS |
 | `/root/indigo-repo/commons/data/ocas-lucid/config.json` | Repo copy — stale |
 
@@ -104,19 +104,19 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 2. Use the path with the highest `streak` as the active config
 3. After writing, re-read the same path to confirm cursor/stats updated correctly
 
-**Never** hardcode `/root/.hermes/commons/` or `/root/commons/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
+**Never** hardcode `<hermes-home>/commons/` or `/root/commons/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
 
 ## Path Expansion Pitfall (CRITICAL)
 
 When reading `config.json` fields like `source_journals_path` or `lucid_journals_path`, the values often contain `~` (e.g., `~/.hermes/commons/journals`). These do NOT auto-expand in Python's `open()`, `os.path.exists()`, or `os.makedirs()`.
 
-**Bug**: `open(config['source_journals_path'])` → `FileNotFoundError: [Errno 2] No such file or found: '/root/.hermes/profiles/indigo/home/.hermes/commons/journals'`
+**Bug**: `open(config['source_journals_path'])` → `FileNotFoundError: [Errno 2] No such file or found: '<hermes-home>/profiles/indigo/home/.hermes/commons/journals'`
 
 The `~` is treated as a literal directory component rather than expanding to `/root`.
 
 **Fix**: Always call `os.path.expanduser()` on every path read from config:
 ```python
-JOURNALS_DIR_PATH = os.path.expanduser(config.get('source_journals_path', '/root/.hermes/commons/journals'))
+JOURNALS_DIR_PATH = os.path.expanduser(config.get('source_journals_path', '<hermes-home>/commons/journals'))
 ```
 
 Even fallback defaults should use absolute paths or be expanded. This applies to ALL config-path fields: `ingestion_log_path`, `decisions_path`, `journals_path`, `source_journals_path`, `lucid_journals_path`.
@@ -210,6 +210,6 @@ When invoked as `elephas.ingest.journals then elephas.consolidate.immediate`, th
 
 The two pipelines are independent but operate on the same input data. Key observations:
 - Elephas's `elephas_cron_pipeline.py` uses LadybugDB (`lb.configure("chronicle")`) — requires the LadybugDB service running on port 9192
-- Elephas writes its run journals to `/root/.hermes/commons/journals/ocas-elephas/YYYY-MM-DD/` — these are excluded from Lucid's scan path
+- Elephas writes its run journals to `<hermes-home>/commons/journals/ocas-elephas/YYYY-MM-DD/` — these are excluded from Lucid's scan path
 - JSON parse errors in source journals (especially `mentor-light-*` files) cause silent skips in elephas — see `references/elephas-pipeline-json-errors.md`
 - The elephas pipeline's DEBUG stdout output is expected and harmless in cron context

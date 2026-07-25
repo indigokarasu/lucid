@@ -20,8 +20,8 @@ The bridge is NOT a systemd service — it's a persistent process that must be r
 terminal(
     background=True,
     command="LBUG_C_API_LIB_PATH=/tmp/liblbug-v0171/liblbug.so.0.17.1 "
-            "nohup python3 /root/.hermes/profiles/indigo/scripts/ladybug_bridge.py "
-            "--db /root/.hermes/commons/db/ocas-elephas/chronicle.lbug "
+            "nohup python3 <hermes-home>/profiles/indigo/scripts/ladybug_bridge.py "
+            "--db <hermes-home>/commons/db/ocas-elephas/chronicle.lbug "
             "--port 9192 "
             "> /tmp/ladybug_bridge_elephas.log 2>&1 &",
     notify_on_complete=True
@@ -38,8 +38,8 @@ sleep 5 && curl -s http://127.0.0.1:9192/health
 ```bash
 pkill -f ladybug_bridge 2>/dev/null; sleep 2
 LBUG_C_API_LIB_PATH=/tmp/liblbug-v0171/liblbug.so.0.17.1 \
-  nohup python3 /root/.hermes/profiles/indigo/scripts/ladybug_bridge.py \
-  --db /root/.hermes/commons/db/ocas-elephas/chronicle.lbug \
+  nohup python3 <hermes-home>/profiles/indigo/scripts/ladybug_bridge.py \
+  --db <hermes-home>/commons/db/ocas-elephas/chronicle.lbug \
   --port 9192 \
   > /tmp/ladybug_bridge_elephas.log 2>&1 &
 sleep 4
@@ -60,7 +60,7 @@ curl -s http://127.0.0.1:9192/health
     "https://github.com/LadybugDB/ladybug/releases/download/v0.17.1/liblbug-linux-x86_64.tar.gz" \
     && mkdir -p /tmp/liblbug-v0171 && cd /tmp/liblbug-v0171 && tar xzf /tmp/liblbug-linux-x86_64.tar.gz
   ```
-- The bridge uses the DB path it was started with. The active DB is `/root/.hermes/commons/db/ocas-elephas/chronicle.lbug` (or `/root/.hermes/profiles/indigo/commons/db/ocas-elephas/chronicle.lbug` in profile-scoped deployments).
+- The bridge uses the DB path it was started with. The active DB is `<hermes-home>/commons/db/ocas-elephas/chronicle.lbug` (or `<hermes-home>/profiles/indigo/commons/db/ocas-elephas/chronicle.lbug` in profile-scoped deployments).
 - The path `/root/commons/db/ocas-elephas/chronicle.lbug` is a **stale/legacy copy** — do NOT point the bridge at it.
 - Verify which DB path the bridge is using: `ps aux | grep ladybug_bridge | grep -v grep`
 
