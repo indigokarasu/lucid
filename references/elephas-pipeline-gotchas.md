@@ -29,7 +29,11 @@ Apply the same guard pattern to `get_type()`, `get_ur()`, and `get_conf()` — a
 
 **Fixed in**: `elephas_cron_run.py` (verified present 2026-06-18). Also present in the older `elephas_cron_pipeline.py` (patched 2026-06-17).
 
+<<<<<<< Updated upstream
 **Note**: If running the pipeline and encountering `AttributeError: 'list' object has no attribute 'get'`, re-apply the type guard pattern to the canonical script at `<repo-root>/commons/db/ocas-elephas/elephas_cron_run.py`.
+=======
+**Note**: If running the pipeline and encountering `AttributeError: 'list' object has no attribute 'get'`, re-apply the type guard pattern to the canonical script at `<fs-root>/indigo-repo/commons/db/ocas-elephas/elephas_cron_run.py`.
+>>>>>>> Stashed changes
 
 ## Bridge Dependency
 
@@ -47,8 +51,13 @@ ps aux | grep ladybug_bridge | grep -v grep
 pkill -f "ladybug_bridge" 2>/dev/null
 sleep 2
 LBUG_C_API_LIB_PATH=/tmp/liblbug-v0171/liblbug.so.0.17.1 \
+<<<<<<< Updated upstream
   nohup python3 <hermes-home>/profiles/indigo/scripts/ladybug_bridge.py \
   --db <hermes-home>/commons/db/ocas-elephas/chronicle.lbug \
+=======
+  nohup python3 ~/.hermes/profiles/indigo/scripts/ladybug_bridge.py \
+  --db ~/.hermes/commons/db/ocas-elephas/chronicle.lbug \
+>>>>>>> Stashed changes
   --port 9192 \
   > /tmp/ladybug_bridge_elephas.log 2>&1 &
 sleep 4
@@ -61,36 +70,63 @@ As of 2026-06-18, the bridge does NOT run as a systemd service — it's a persis
 
 ## Cursor Update After Manual/Cron Run
 
+<<<<<<< Updated upstream
 After running the elephas pipeline, update the lucid config cursor to include the new journal files. Add the new `cron_*.json` entries to both `cursor.ocas-elephas` AND `cursor.elephas` in `<hermes-home>/profiles/indigo/commons/data/ocas-lucid/config.json`. Without this, lucid will try to re-process elephas journals on the next dream cycle.
 
 **Note**: This only applies to elephas journals that ARE in Lucid's scan path (`<hermes-home>/commons/journals/ocas-elephas/`). Journals written to `<commons>/journals/ocas-elephas/` by the canonical script do NOT need cursor updates (they're outside Lucid's scan scope).
+=======
+After running the elephas pipeline, update the lucid config cursor to include the new journal files. Add the new `cron_*.json` entries to both `cursor.ocas-elephas` AND `cursor.elephas` in `~/.hermes/profiles/indigo/commons/data/ocas-lucid/config.json`. Without this, lucid will try to re-process elephas journals on the next dream cycle.
+
+**Note**: This only applies to elephas journals that ARE in Lucid's scan path (`~/.hermes/commons/journals/ocas-elephas/`). Journals written to `<fs-root>/commons/journals/ocas-elephas/` by the canonical script do NOT need cursor updates (they're outside Lucid's scan scope).
+>>>>>>> Stashed changes
 
 ## Dual Journal Output Paths
 
 The canonical `elephas_cron_run.py` writes its run journals to:
 ```
+<<<<<<< Updated upstream
 <commons>/journals/ocas-elephas/YYYY-MM-DD/cron_<hash>.json
+=======
+<fs-root>/commons/journals/ocas-elephas/YYYY-MM-DD/cron_<hash>.json
+>>>>>>> Stashed changes
 ```
 
 Lucid scans journals under:
 ```
+<<<<<<< Updated upstream
 <hermes-home>/commons/journals/
 ```
 
 These are **different directories**. Elephas cron journals are NOT in Lucid's scan path — this is intentional (elephas journals are self-contained run records, not Lucid input). Do NOT add `<commons>/journals/ocas-elephas/` to Lucid's scan roots.
 
 The **ingestion log** at `<commons>/db/ocas-elephas/ingestion_log.jsonl` tracks what elephas has already processed, so re-runs are safe — the pipeline deduplicates via the ingestion log, not via Lucid's cursor.
+=======
+~/.hermes/commons/journals/
+```
+
+These are **different directories**. Elephas cron journals are NOT in Lucid's scan path — this is intentional (elephas journals are self-contained run records, not Lucid input). Do NOT add `<fs-root>/commons/journals/ocas-elephas/` to Lucid's scan roots.
+
+The **ingestion log** at `<fs-root>/commons/db/ocas-elephas/ingestion_log.jsonl` tracks what elephas has already processed, so re-runs are safe — the pipeline deduplicates via the ingestion log, not via Lucid's cursor.
+>>>>>>> Stashed changes
 
 ## Script Path
 
 The pipeline script is at:
 ```bash
+<<<<<<< Updated upstream
 <repo-root>/commons/db/ocas-elephas/elephas_cron_run.py
+=======
+<fs-root>/indigo-repo/commons/db/ocas-elephas/elephas_cron_run.py
+>>>>>>> Stashed changes
 ```
 
 Run with:
 ```bash
+<<<<<<< Updated upstream
 cd <repo-root>/commons/db/ocas-elephas
+=======
+cd <fs-root>/indigo-repo/commons/db/ocas-elephas
+>>>>>>> Stashed changes
 python3 elephas_cron_run.py
 ```
 
@@ -102,11 +138,19 @@ curl -s http://localhost:9192/health
 ```
 If the bridge is unhealthy, the script will print `BRIDGE ERROR` for every query and produce an empty run. See "Bridge Dependency" section above for restart procedure.
 
+<<<<<<< Updated upstream
 Note: An older path (`<hermes-home>/profiles/indigo/commons/db/ocas-elephas/elephas_cron_pipeline.py`) existed in a previous deployment. The current canonical path is under `<repo-root>/`.
 
 ## Self-Referential Journal Accumulation (Known Behavior)
 
 The elephas cron writes its run journals to `<commons>/journals/ocas-elephas/YYYY-MM-DD/cron_*.json` (via `JOURNALS_OUTPUT` where `AGENT_ROOT = Path("/root")`). These same files are then scanned on the next run because `load_processed()` path matching fails for them — the ingestion log stores the path as written by the script, but the filesystem scan discovers them under a slightly different path representation.
+=======
+Note: An older path (`~/.hermes/profiles/indigo/commons/db/ocas-elephas/elephas_cron_pipeline.py`) existed in a previous deployment. The current canonical path is under `<fs-root>/indigo-repo/`.
+
+## Self-Referential Journal Accumulation (Known Behavior)
+
+The elephas cron writes its run journals to `<fs-root>/commons/journals/ocas-elephas/YYYY-MM-DD/cron_*.json` (via `JOURNALS_OUTPUT` where `AGENT_ROOT = Path("/root")`). These same files are then scanned on the next run because `load_processed()` path matching fails for them — the ingestion log stores the path as written by the script, but the filesystem scan discovers them under a slightly different path representation.
+>>>>>>> Stashed changes
 
 **Result**: Each run re-scans ~135 accumulated cron journals, finds 0 entities in all of them, and logs them with `reason: "no_entities"`. This is harmless but adds ~5-10 seconds per run.
 
@@ -133,7 +177,11 @@ After a full pipeline run, ~135 journals may remain "unprocessed" in the ingesti
 | `extract_entities()` returns empty | Yes (correct) | No (bug) |
 | Count after full run | ~135 (and growing — elephas cron journals accumulate) | Growing unbounded |
 
+<<<<<<< Updated upstream
 The residual count grows over time because elephas's own cron output journals (`<commons>/journals/ocas-elephas/cron_*.json`) are re-scanned each run. The ingestion log path matching fails for these because the log stores the path as written by the script, but the scan discovers them under a slightly different path format. This is harmless — they have no entities and are logged with `reason: "no_entities"` each time.
+=======
+The residual count grows over time because elephas's own cron output journals (`<fs-root>/commons/journals/ocas-elephas/cron_*.json`) are re-scanned each run. The ingestion log path matching fails for these because the log stores the path as written by the script, but the scan discovers them under a slightly different path format. This is harmless — they have no entities and are logged with `reason: "no_entities"` each time.
+>>>>>>> Stashed changes
 
 **Action**: If residual count is stable (not growing unboundedly) and all are scan/cron/self-referential files, the pipeline completed successfully. Do NOT re-run the pipeline to "catch" these — they have no extractable entities by design.
 
