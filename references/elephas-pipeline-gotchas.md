@@ -47,8 +47,8 @@ ps aux | grep ladybug_bridge | grep -v grep
 pkill -f "ladybug_bridge" 2>/dev/null
 sleep 2
 LBUG_C_API_LIB_PATH=/tmp/liblbug-v0171/liblbug.so.0.17.1 \
-  nohup python3 /root/.hermes/profiles/indigo/scripts/ladybug_bridge.py \
-  --db /root/.hermes/commons/db/ocas-elephas/chronicle.lbug \
+  nohup python3 <hermes-home>/profiles/indigo/scripts/ladybug_bridge.py \
+  --db <hermes-home>/commons/db/ocas-elephas/chronicle.lbug \
   --port 9192 \
   > /tmp/ladybug_bridge_elephas.log 2>&1 &
 sleep 4
@@ -61,9 +61,9 @@ As of 2026-06-18, the bridge does NOT run as a systemd service — it's a persis
 
 ## Cursor Update After Manual/Cron Run
 
-After running the elephas pipeline, update the lucid config cursor to include the new journal files. Add the new `cron_*.json` entries to both `cursor.ocas-elephas` AND `cursor.elephas` in `/root/.hermes/profiles/indigo/commons/data/ocas-lucid/config.json`. Without this, lucid will try to re-process elephas journals on the next dream cycle.
+After running the elephas pipeline, update the lucid config cursor to include the new journal files. Add the new `cron_*.json` entries to both `cursor.ocas-elephas` AND `cursor.elephas` in `<hermes-home>/profiles/indigo/commons/data/ocas-lucid/config.json`. Without this, lucid will try to re-process elephas journals on the next dream cycle.
 
-**Note**: This only applies to elephas journals that ARE in Lucid's scan path (`/root/.hermes/commons/journals/ocas-elephas/`). Journals written to `/root/commons/journals/ocas-elephas/` by the canonical script do NOT need cursor updates (they're outside Lucid's scan scope).
+**Note**: This only applies to elephas journals that ARE in Lucid's scan path (`<hermes-home>/commons/journals/ocas-elephas/`). Journals written to `/root/commons/journals/ocas-elephas/` by the canonical script do NOT need cursor updates (they're outside Lucid's scan scope).
 
 ## Dual Journal Output Paths
 
@@ -74,7 +74,7 @@ The canonical `elephas_cron_run.py` writes its run journals to:
 
 Lucid scans journals under:
 ```
-/root/.hermes/commons/journals/
+<hermes-home>/commons/journals/
 ```
 
 These are **different directories**. Elephas cron journals are NOT in Lucid's scan path — this is intentional (elephas journals are self-contained run records, not Lucid input). Do NOT add `/root/commons/journals/ocas-elephas/` to Lucid's scan roots.
@@ -102,7 +102,7 @@ curl -s http://localhost:9192/health
 ```
 If the bridge is unhealthy, the script will print `BRIDGE ERROR` for every query and produce an empty run. See "Bridge Dependency" section above for restart procedure.
 
-Note: An older path (`/root/.hermes/profiles/indigo/commons/db/ocas-elephas/elephas_cron_pipeline.py`) existed in a previous deployment. The current canonical path is under `/root/indigo-repo/`.
+Note: An older path (`<hermes-home>/profiles/indigo/commons/db/ocas-elephas/elephas_cron_pipeline.py`) existed in a previous deployment. The current canonical path is under `/root/indigo-repo/`.
 
 ## Self-Referential Journal Accumulation (Known Behavior)
 
