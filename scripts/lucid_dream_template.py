@@ -23,9 +23,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # === PATHS (pathlib) ===
-DATA_DIR = Path("~/.hermes/commons/data/ocas-lucid")
-JOURNALS_DIR = Path("~/.hermes/commons/journals")
-LUCID_JOURNALS_DIR = Path("~/.hermes/commons/journals/ocas-lucid")
+DATA_DIR = Path(os.path.expanduser("~/.hermes/commons/data/ocas-lucid"))
+JOURNALS_DIR = Path(os.path.expanduser("~/.hermes/commons/journals"))
+LUCID_JOURNALS_DIR = Path(os.path.expanduser("~/.hermes/commons/journals/ocas-lucid"))
 CONFIG_PATH = DATA_DIR / "config.json"
 INGESTION_LOG_PATH = DATA_DIR / "ingestion_log.jsonl"
 DECISIONS_PATH = DATA_DIR / "decisions.jsonl"
