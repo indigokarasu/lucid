@@ -94,8 +94,8 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 |------|--------|
 | `<hermes-home>/commons/data/ocas-lucid/config.json` | Active cron data dir (write target) |
 | `<hermes-home>/profiles/indigo/commons/data/ocas-lucid/config.json` | Profile-specific config (may be authoritative) |
-| `/root/commons/data/ocas-lucid/config.json` | Stale copy — DO NOT WRITE TO THIS |
-| `/root/indigo-repo/commons/data/ocas-lucid/config.json` | Repo copy — stale |
+| `<commons>/data/ocas-lucid/config.json` | Stale copy — DO NOT WRITE TO THIS |
+| `<repo-root>/commons/data/ocas-lucid/config.json` | Repo copy — stale |
 
 **Rule**: Before writing the dream cycle script, identify the active config. Check which one has the highest `streak` value — that's the config the cron job has been incrementing, and the one your script must read/write.
 
@@ -104,7 +104,7 @@ There are typically **multiple** `config.json` files for ocas-lucid on the files
 2. Use the path with the highest `streak` as the active config
 3. After writing, re-read the same path to confirm cursor/stats updated correctly
 
-**Never** hardcode `<hermes-home>/commons/` or `/root/commons/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
+**Never** hardcode `<hermes-home>/commons/` or `<commons>/` without verification — you will write to the stale copy and think the run succeeded while the cron job continues from the old cursor.
 
 ## Path Expansion Pitfall (CRITICAL)
 
@@ -136,8 +136,8 @@ When MemPalace MCP tools are not registered (common in cron/CLI environments), t
 
 | Database | Path | Tables |
 |----------|------|--------|
-| Knowledge Graph | `/root/.mempalace/palace/knowledge_graph.sqlite3` | `entities`, `triples` |
-| ChromaDB | `/root/.mempalace/palace/chroma.sqlite3` | `collections`, `embeddings`, etc. |
+| Knowledge Graph | `<mempalace>/palace/knowledge_graph.sqlite3` | `entities`, `triples` |
+| ChromaDB | `<mempalace>/palace/chroma.sqlite3` | `collections`, `embeddings`, etc. |
 
 **Entity schema**: `(id TEXT PK, name TEXT, type TEXT, properties TEXT, created_at TEXT)`
 **Triple schema**: `(id TEXT PK, subject TEXT, predicate TEXT, object TEXT, valid_from TEXT, valid_to TEXT, confidence REAL, source_closet TEXT, source_file TEXT, extracted_at TEXT)`
@@ -147,7 +147,7 @@ Minimal filing example:
 import sqlite3, uuid, json
 
 def file_to_kg(entities, rel_path, skill, room):
-    conn = sqlite3.connect("/root/.mempalace/palace/knowledge_graph.sqlite3")
+    conn = sqlite3.connect("<mempalace>/palace/knowledge_graph.sqlite3")
     c = conn.cursor()
     for ent in entities:
         eid = ent["name"].lower().replace(" ", "_")[:40]

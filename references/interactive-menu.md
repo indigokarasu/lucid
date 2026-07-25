@@ -24,4 +24,3 @@ Match the user's response against the full choice string. If the response doesn'
 
 On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list.
 
-

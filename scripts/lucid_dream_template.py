@@ -244,7 +244,7 @@ def file_to_kg(entities, rel_path, skill, room, narrative_summary):
     """File entities to MemPalace KG via SQLite direct access."""
     try:
         import sqlite3
-        conn = sqlite3.connect("/root/.mempalace/palace/knowledge_graph.sqlite3")
+        conn = sqlite3.connect("<mempalace>/palace/knowledge_graph.sqlite3")
         c = conn.cursor()
         filed = []
         for ent in entities:
