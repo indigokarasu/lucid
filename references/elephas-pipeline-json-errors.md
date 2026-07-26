@@ -49,11 +49,7 @@ When running elephas pipeline and observing >20% parse error rate:
 The `elephas_cron_pipeline.py` prints extensive `DEBUG:` lines to stdout:
 ```
 DEBUG: Decision log written
-<<<<<<< Updated upstream
 DEBUG: journal_dir = <hermes-home>/commons/journals/ocas-elephas/2026-06-19
-=======
-DEBUG: journal_dir = ~/.hermes/commons/journals/ocas-elephas/2026-06-19
->>>>>>> Stashed changes
 DEBUG: journal_dir created/exists
 DEBUG: journal_path = ...
 DEBUG: journal_path.exists() before = False
