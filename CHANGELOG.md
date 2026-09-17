@@ -1,3 +1,8 @@
+## [3.1.0] - 2026-09-16
+
+### Added
+- **Schedule gap recovery** — morning gap detection re-processes missed 3am `lucid:dream` runs if the system was asleep; logs schedule_gap and batches with `lucid:update`.
+
 ## [2.0.2] - 2026-04-26
 
 ### Changed

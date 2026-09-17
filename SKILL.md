@@ -14,7 +14,7 @@ includes:
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 3.0.0
+  version: "3.1.0"
 ---
 
 # Lucid
@@ -156,6 +156,8 @@ Universal OKRs per `spec-ocas-journal.md`, plus skill-specific targets. See `ref
 | `lucid:update` | cron | `0 0 * * *` (midnight daily) | `lucid.update` |
 
 See `references/cron-execution.md` for cron-specific execution patterns (heredoc Python, two-pass classification, degraded mode).
+
+**Schedule gap recovery:** If the system was asleep at the 3am `lucid:dream` run, the morning gap detector re-processes the missed run. On the next wake / morning invocation, check whether a dream cycle ran for the expected date (scan the run journal directory for the target `YYYY-MM-DD`); if absent, run `lucid.dream` once to catch up. Log the gap (schedule_gap=missed→recovered) and optionally batch with `lucid:update` so the missed nightly curation still lands the same day.
 
 ## Ontology mapping
 
