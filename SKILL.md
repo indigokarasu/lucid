@@ -131,3 +131,7 @@ filing that did not happen. See `infrastructure/degraded-mode-execution`.
 ~/.hermes/commons/journals/ocas-lucid/
   YYYY-MM-DD/{run_id}.json
 ```
+
+## Support Files
+
+- `references/self-update-lucid.md` — Self-Update Procedure for Lucid
