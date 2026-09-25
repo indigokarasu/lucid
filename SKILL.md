@@ -163,10 +163,6 @@ See `references/cron-execution.md` for cron-specific execution patterns (heredoc
 
 Lucid extracts no entities from user data directly. It classifies and routes journal content produced by other skills. When it emits Signals to Elephas, the Signal's `payload.type` reflects the entity type found in the source journal (Person, Place, Concept, etc.) per spec-ocas-ontology.md.
 
-## Self-Update
-
-See `references/self-update-lucid.md`.
-
 ## Visibility
 
 public
@@ -176,6 +172,18 @@ public
 - **`re_evaluations` can be `null` (not 0)** in older queue entries. Always use `e.get('re_evaluations') or 0` when comparing. Direct `>= 3` comparison against `null` returns `False` in Python and silently skips cleanup.
 
 ## Scoring Traps
+
+### Check the ledger before re-filing
+Cursor rollbacks and interrupted runs can leave a source file still past the
+cursor after it was already filed. Before writing a curated entry, grep
+`decisions.jsonl` for the source path; if it already carries a `file` decision,
+record `skip` with an `already_filed` note instead of writing a duplicate.
+
+### Run id and folder come from the wall clock
+Generate `run_id` as `lucid-<UTC now>` at write time and place the journal in
+the folder for the run_id's UTC date. Never reuse a scheduled slot time --
+actual fire times can differ (manual/off-schedule claims), and slot-derived
+ids have disagreed with true run times before.
 
 ### Payload keys vs. narrative content
 
