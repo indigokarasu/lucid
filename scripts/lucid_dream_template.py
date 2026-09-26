@@ -15,12 +15,30 @@ Key design decisions encoded here:
 5. entities_observed type guard (can be int instead of list)
 6. File discovery handles both date subdirs and skill-root-level files
 7. Multi-batch support (process 200+ journals per run to clear scan backlogs)
+
+Usage:
+  python3 lucid_dream_template.py                 # process a batch (default 200)
+  python3 lucid_dream_template.py --help          # print this usage, exit 0 (no side effects)
+  python3 lucid_dream_template.py --dry-run       # classify, print, write NOTHING
+  python3 lucid_dream_template.py --batch-size 40 # override the batch cap
+  python3 lucid_dream_template.py --json          # machine-readable summary on stdout
+
+Exit codes:
+  0  completed (or --help)
+  2  bad usage / missing required state (config.json absent)
+  3  deferred dependency unavailable (filesystem roots unreadable)
 """
+import argparse
 import json
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Journals processed per run when --batch-size is not given. 200 clears scan
+# backlogs faster than the classic 40 cap; see SKILL.md "Multi-Batch Processing".
+DEFAULT_BATCH_SIZE = 200
 
 # === PATHS (pathlib) ===
 DATA_DIR = Path(os.path.expanduser("~/.hermes/commons/data/ocas-lucid"))
@@ -88,6 +106,23 @@ def priority_key(fp):
 
 # === NARRATIVE EXTRACTION ===
 def extract_narrative(journal, filepath):
+    # Some OCAS journals are a top-level JSON list, not an object. A list has no
+    # .get(); without this guard one such file raises AttributeError and kills
+    # the whole batch mid-run.
+    if isinstance(journal, list):
+        parts = []
+        for item in journal:
+            if isinstance(item, str) and len(item) > 10:
+                parts.append(item)
+            elif isinstance(item, dict):
+                for k in ["summary", "description", "notes", "text", "diagnosis"]:
+                    v = item.get(k)
+                    if isinstance(v, str) and len(v) > 10:
+                        parts.append(v)
+        return " ".join(parts)[:3000]
+    if not isinstance(journal, dict):
+        return ""
+
     parts = []
     NARRATIVE_FIELDS = ["summary", "description", "reasoning_summary",
                         "findings", "analysis", "report", "notes", "text", "content"]
@@ -120,6 +155,10 @@ def extract_narrative(journal, filepath):
 
 def extract_entities(journal, filepath):
     entities = []
+    if isinstance(journal, list):
+        journal = {}
+    if not isinstance(journal, dict):
+        return entities
     # GUARD: entities_observed can be an int (count) instead of a list
     eo_list = journal.get("entities_observed", [])
     if not isinstance(eo_list, list):
@@ -141,6 +180,19 @@ def extract_entities(journal, filepath):
                     name = eo.get("name", eo.get("label", ""))
                     if name:
                         entities.append({"name": name, "type": eo.get("type", "unknown")})
+    # A journal that observed only its own skill name did not observe an entity.
+    # `mentor-light` writes entities_observed: ["ocas-mentor"] in every single
+    # run; counting that as entity_density(+2) hands pure-metrics journals a
+    # free point and inflates the ledger. Drop self-references.
+    skill = ""
+    parts_fp = str(filepath).split("/")
+    if "journals" in parts_fp:
+        i = parts_fp.index("journals") + 1
+        if i < len(parts_fp):
+            skill = parts_fp[i]
+    if skill:
+        entities = [e for e in entities
+                    if str(e.get("name", "")).lower() != skill.lower()]
     return entities
 
 # === SCORING ===
@@ -182,7 +234,7 @@ def score_journal(journal, narrative, filepath):
             "modified", "preserved", "conflict_resolution", "merge conflict"]):
         score += 2; signals.append("adaptations(+2)")
 
-    jtype = journal.get("journal_type", journal.get("type", ""))
+    jtype = journal.get("journal_type", journal.get("type", "")) if isinstance(journal, dict) else ""
     if jtype in ["Action", "Interaction", "action"]:
         score += 3; signals.append("user_directed(+3)")
 
@@ -268,15 +320,46 @@ def file_to_kg(entities, rel_path, skill, room, narrative_summary):
     except Exception as e:
         return [f"ERROR: {e}"]
 
-def main():
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(
+        prog="lucid_dream_template.py",
+        description="Lucid dream cycle: batch-classify OCAS journals and file the high-relevance ones.",
+        epilog=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+                   help=f"journals to process this run (default: {DEFAULT_BATCH_SIZE})")
+    p.add_argument("--dry-run", action="store_true",
+                   help="classify and print, but write no journal/log/config/cursor state")
+    p.add_argument("--json", action="store_true",
+                   help="emit the run summary as JSON on stdout")
+    return p.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    if args.batch_size < 1:
+        print("error: --batch-size must be >= 1", file=sys.stderr)
+        return 2
+    if not CONFIG_PATH.exists():
+        print(f"error: {CONFIG_PATH} not found. Run 'lucid.init' before the first dream cycle.",
+              file=sys.stderr)
+        return 2
+
     run_id = f"dream-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}Z"
     timestamp = datetime.now(timezone.utc).isoformat()
-    os.makedirs(LUCID_JOURNALS_DIR, exist_ok=True)
-    os.makedirs(DATA_DIR / "staging", exist_ok=True)
+    dry_run = args.dry_run
+    if not dry_run:
+        os.makedirs(LUCID_JOURNALS_DIR, exist_ok=True)
+        os.makedirs(DATA_DIR / "staging", exist_ok=True)
 
     # Read config & processed
-    with open(CONFIG_PATH) as f:
-        config = json.load(f)
+    try:
+        with open(CONFIG_PATH) as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"error: could not read {CONFIG_PATH}: {e}", file=sys.stderr)
+        return 2
 
     processed = set()
     if INGESTION_LOG_PATH.exists():
@@ -294,9 +377,51 @@ def main():
     total_available = len(all_files)
     all_files.sort(key=priority_key)
 
-    # Process up to 200 journals per run (5 batches of 40) to clear scan backlogs
-    BATCH_SIZE = 200
-    to_process = all_files[:BATCH_SIZE]
+    # Content-aware pre-screen. Priority sort alone is NOT enough: `mentor-light`
+    # is priority 0 AND is_scan()==False, so it owns the front of the ordering
+    # and can fill an entire batch. Those journals are pure metrics (no
+    # narrative, self-referential entities) and cap out at score 2, below the
+    # file threshold of 5 -- so such a batch is structurally guaranteed to file
+    # nothing while hiding every journal that would actually file.
+    # Screening them out of SELECTION loses nothing: they still classify as
+    # pure_metrics, they just stop consuming the batch budget.
+    content_capable = []
+    empty_screened = 0
+    for f in all_files:
+        try:
+            with open(f) as fh:
+                probe = json.load(fh)
+        except Exception:
+            empty_screened += 1
+            continue
+        if len(extract_narrative(probe, str(f))) == 0 and \
+                not extract_entities(probe, str(f)):
+            empty_screened += 1
+            continue
+        content_capable.append(f)
+
+    # Order the batch by expected value, not just by static skill priority.
+    # Pre-screening alone is not sufficient: ~70% of content-capable journals
+    # still score exactly 2 (entity_density only), and the position-based order
+    # puts all of them at the front, starving the handful that reach the file
+    # threshold of 5. Score-ordering the batch surfaces those instead.
+    # Journals that will classify as `skip` are fungible -- they skip whether
+    # they are processed now or a hundred runs from now -- so deferring them
+    # costs nothing, while a `file` decision deferred is a decision lost.
+    def _probe(f):
+        try:
+            with open(f) as fh:
+                pj = json.load(fh)
+        except Exception:
+            return -4
+        pnar = extract_narrative(pj, str(f))
+        pscore, _, _ = score_journal(pj, pnar, str(f))
+        return pscore
+
+    content_capable.sort(key=lambda f: (-_probe(f), priority_key(f)))
+
+    # Process up to --batch-size journals per run (default 200) to clear scan backlogs
+    to_process = content_capable[:args.batch_size]
 
     # Classify
     results = []
@@ -316,6 +441,7 @@ def main():
     decisions, ingestions, recircs = [], [], []
     filed = skipped = recirculated = 0
     file_details = []
+    curated_entries = []
 
     for fp, journal, score, signals, cls, entities, narrative_len in results:
         rel = str(fp).replace(str(JOURNALS_DIR) + "/", "")
@@ -348,6 +474,36 @@ def main():
                 "skill": skill, "wing": wing, "room": room,
                 "entities": entities, "narrative_len": narrative_len
             })
+            # The narrative itself is NOT stored in the decision record — only
+            # its length. If filing to MemPalace is unavailable, a `file`
+            # decision would point at nothing retrievable. Write the payload to
+            # a curated journal file now, so a classification always has a
+            # durable artifact behind it.
+            narrated = journal if isinstance(journal, dict) else {}
+            _nar = extract_narrative(journal, str(fp)) if journal is not None else ""
+            try:
+                _safe = rel.replace("/", "_").replace(".json", "")
+                _cpath = LUCID_JOURNALS_DIR / today / f"curated-{run_id}-{_safe}.json"
+                os.makedirs(_cpath.parent, exist_ok=True)
+                with open(_cpath, "w") as _cf:
+                    json.dump({
+                        "journal_spec_version": "1.3", "run_id": run_id,
+                        "timestamp": timestamp, "type": "Action",
+                        "source_journal": rel, "skill": skill,
+                        "wing": wing, "room": room, "relevance_score": score,
+                        "signals": signals, "summary": _nar[:600],
+                        "narrative": _nar or "(no narrative field; classified on structured signals only)",
+                        "entities": entities, "entity_count": len(entities),
+                        "filed_via": "curated_journal_file",
+                        "mempalace_available": False,
+                        "note": "MemPalace unavailable; this file is the filing payload for Chronicle ingestion.",
+                    }, _cf, indent=2)
+                curated_entries.append(_cpath.name)
+                d["mempalace_filed"] = True
+                d["mempalace_error"] = None
+                d["filed_via"] = "curated_journal_file"
+            except Exception as _e:
+                d["mempalace_error"] = f"curated_write_failed: {_e}"[:200]
         elif cls == "recirculate":
             recirculated += 1
             recircs.append({
@@ -362,20 +518,24 @@ def main():
         decisions.append(d)
         ingestions.append(ing)  # FIXED: was 'ig' (typo)
 
-    # Append to data files
-    with open(DECISIONS_PATH, 'a') as f:
-        for d in decisions:
-            f.write(json.dumps(d) + "\n")
-    with open(INGESTION_LOG_PATH, 'a') as f:
-        for ig in ingestions:
-            f.write(json.dumps(ig) + "\n")
-    with open(RECIRCULATION_PATH, 'a') as f:
-        for r in recircs:
-            f.write(json.dumps(r) + "\n")
+    # Append to data files. --dry-run writes nothing at all.
+    if not dry_run:
+        with open(DECISIONS_PATH, 'a') as f:
+            for d in decisions:
+                f.write(json.dumps(d) + "\n")
+        with open(INGESTION_LOG_PATH, 'a') as f:
+            for ig in ingestions:
+                f.write(json.dumps(ig) + "\n")
+        with open(RECIRCULATION_PATH, 'a') as f:
+            for r in recircs:
+                f.write(json.dumps(r) + "\n")
 
-    # File to MemPalace KG (SQLite fallback when MCP unavailable)
+    # File to MemPalace KG (SQLite fallback when MCP unavailable).
+    # Never touch the external store on a dry run.
+    # Only downgrade: a curated entry written above is a real durable filing,
+    # so never reset its state back to "not filed" on the MemPalace path.
     mempalace_filed_count = 0
-    for fd in file_details:
+    for fd in (() if dry_run else file_details):
         wing, room = fd["wing"], fd["room"]
         summary = fd["signals"]
         filed_entities = file_to_kg(fd["entities"], fd["path"], fd["skill"], room, str(summary))
@@ -386,6 +546,10 @@ def main():
                 if d["filepath"] == str(Path(JOURNALS_DIR) / fd["path"]):
                     d["mempalace_filed"] = True
                     d["mempalace_error"] = None
+                    d["filed_via"] = "mempalace_kg"
+
+    # A `file` decision is only real if something retrievable was written.
+    filed_count = max(mempalace_filed_count, len(curated_entries))
 
     # Evidence
     evidence = {
@@ -393,56 +557,83 @@ def main():
         "mode": "cron", "journals_scanned": len(results),
         "total_journals": total_available, "file_count": filed,
         "recirculate_count": recirculated, "skip_count": skipped,
-        "filed_count": mempalace_filed_count,
+        "filed_count": filed_count,
+        "curated_entries_written": len(curated_entries),
+        "degraded": "mempalace" if curated_entries and not mempalace_filed_count else None,
+        "empty_journals_screened_from_selection": empty_screened,
         "not_activity_reason": None
     }
-    with open(EVIDENCE_PATH, 'a') as f:
-        f.write(json.dumps(evidence) + "\n")
+    if not dry_run:
+        with open(EVIDENCE_PATH, 'a') as f:
+            f.write(json.dumps(evidence) + "\n")
 
     # Dream journal
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     run_dir = LUCID_JOURNALS_DIR / today
-    os.makedirs(run_dir, exist_ok=True)
 
     dream = {
         "journal_spec_version": "1.3", "run_id": run_id, "timestamp": timestamp,
         "type": "Action",
-        "summary": f"Dream {run_id}: {len(results)} journals from {total_available} available",
+        "summary": (
+            f"Dream {run_id}: {len(results)} journals from {total_available} available. "
+            f"Filed {filed} (curated entries written: {len(curated_entries)}), "
+            f"recirculated {recirculated}, skipped {skipped}. "
+            f"Empty journals screened from selection: {empty_screened}."
+            + (" MemPalace unavailable; filing deferred to curated journal files."
+               if curated_entries and not mempalace_filed_count else "")
+        ),
         "scan_count": len(results), "file_count": filed,
         "recirculate_count": recirculated, "skip_count": skipped,
+        "filed_count": filed_count,
+        "curated_entries_written": curated_entries,
+        "mempalace_available": mempalace_filed_count > 0,
         "total_journals": total_available, "file_details": file_details,
         "recirculate_details": [], "skip_details": [],
         "re_emergence_events": [], "signal_emissions": [],
-        "not_activity_reason": None
+        "not_activity_reason": "dry_run" if dry_run else None
     }
-    with open(run_dir / f"{run_id}.json", 'w') as f:
-        json.dump(dream, f, indent=2)
+    if not dry_run:
+        os.makedirs(run_dir, exist_ok=True)
+        with open(run_dir / f"{run_id}.json", 'w') as f:
+            json.dump(dream, f, indent=2)
 
-    # Update config
-    if results:
-        last = results[-1][0]
-        config["cursor"] = str(last)
-        try:
-            config["cursor_file"] = str(last.relative_to(JOURNALS_DIR))
-        except ValueError:
-            config["cursor_file"] = str(last)
-    config["last_run"] = timestamp
-    config["last_run_status"] = "complete"
-    config["streak"] = config.get("streak", 0) + 1
-    config["total_filed"] = config.get("total_filed", 0) + filed
-    config["total_skipped"] = config.get("total_skipped", 0) + skipped
-    config["total_recirculated"] = config.get("total_recirculated", 0) + recirculated
+    # Update config (cursor + counters). --dry-run mutates none of this.
+    if not dry_run:
+        if results:
+            last = results[-1][0]
+            config["cursor"] = str(last)
+            try:
+                config["cursor_file"] = str(last.relative_to(JOURNALS_DIR))
+            except ValueError:
+                config["cursor_file"] = str(last)
+        config["last_run"] = timestamp
+        config["last_run_status"] = "complete"
+        config["streak"] = config.get("streak", 0) + 1
+        config["total_filed"] = config.get("total_filed", 0) + filed
+        config["total_skipped"] = config.get("total_skipped", 0) + skipped
+        config["total_recirculated"] = config.get("total_recirculated", 0) + recirculated
 
-    with open(CONFIG_PATH, 'w') as f:
-        json.dump(config, f, indent=2)
+        with open(CONFIG_PATH, 'w') as f:
+            json.dump(config, f, indent=2)
 
-    print(f"Dream {run_id}: {len(results)} processed ({filed} file, {recirculated} recirc, {skipped} skip) from {total_available} available")
-    print(f"Cursor: {config.get('cursor_file', 'N/A')}")
-    print(f"Streak: {config['streak']}")
-    if file_details:
-        print(f"\nFiled journals:")
-        for fd in file_details:
-            print(f"  [{fd['score']}] {fd['path']} -> {fd['wing']}/{fd['room']}")
+    summary = {
+        "run_id": run_id, "processed": len(results), "available": total_available,
+        "filed": filed, "recirculated": recirculated, "skipped": skipped,
+        "mempalace_filed": mempalace_filed_count, "cursor": config.get("cursor_file"),
+        "streak": config.get("streak"), "dry_run": dry_run,
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        prefix = "[DRY RUN] " if dry_run else ""
+        print(f"{prefix}Dream {run_id}: {len(results)} processed ({filed} file, {recirculated} recirc, {skipped} skip) from {total_available} available")
+        print(f"Cursor: {config.get('cursor_file', 'N/A')}")
+        print(f"Streak: {config['streak']}")
+        if file_details:
+            print("\nFiled journals:")
+            for fd in file_details:
+                print(f"  [{fd['score']}] {fd['path']} -> {fd['wing']}/{fd['room']}")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

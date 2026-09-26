@@ -56,6 +56,36 @@ The `config.json` `cursor` field stores absolute path. The `cursor_file` field s
 
 ## Scoring / Classification
 
+### A batch can be structurally incapable of filing anything
+Sorting by skill priority is necessary but NOT sufficient. `mentor-light` is
+priority 0 *and* `is_scan()` returns False for it, so it owns the front of the
+ordering. Those journals are pure metrics — no narrative, `entities_observed`
+listing only their own skill name — and cap at score 2, below the file threshold
+of 5. A 200-journal batch of them is guaranteed to file nothing while hiding
+every journal that would file.
+
+**Rule**: order the batch by *expected value* (probe-score descending), not by
+static skill priority alone. Pre-screen for content, then score-order. Journals
+that will classify as `skip` are fungible — they skip whether processed now or
+a hundred runs from now — so deferring them is free, while a `file` decision
+deferred is a decision lost.
+
+Without this, a run reports `scanned=200, filed=0` and looks like a healthy
+low-signal day when it is actually a starved selection.
+
+### A self-observation is not an entity
+A journal whose `entities_observed` contains only its own skill name
+(`mentor-light` writes `["ocas-mentor"]` in every run) observed *bookkeeping*,
+not an entity. Counting it fires `entity_density(+2)` and gives every
+pure-metrics journal a free point, which inflates the ledger and hides
+`pure_metrics` early-exit. Filter self-references in `extract_entities`.
+
+### Top-level JSON lists crash the batch
+Some OCAS journals are a top-level JSON **list**, not an object. `.get()` on a
+list raises `AttributeError` and aborts the entire batch, losing every
+unprocessed journal in it. Guard `extract_narrative`, `extract_entities` and
+`score_journal` with an `isinstance(journal, dict)` check.
+
 ### `notes` field is the primary signal source
 Most OCAS journals store meaningful content in a `notes` field (string), not in nested structures. Always extract `notes` for narrative analysis.
 
