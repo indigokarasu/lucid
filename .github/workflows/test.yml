@@ -1,0 +1,23 @@
+name: test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The dream cycle template must stay dependency-free and importable, and
+      # its CLI must stay inspectable without executing a cycle.
+      - name: Byte-compile
+        run: python3 -m py_compile scripts/lucid_dream_template.py
+      - name: Bash syntax
+        run: bash -n scripts/update.sh
+      - name: Smoke tests
+        run: python3 tests/test_smoke.py
