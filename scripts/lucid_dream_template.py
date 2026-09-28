@@ -41,9 +41,10 @@ from pathlib import Path
 DEFAULT_BATCH_SIZE = 200
 
 # === PATHS (pathlib) ===
-DATA_DIR = Path(os.path.expanduser("~/.hermes/commons/data/ocas-lucid"))
-JOURNALS_DIR = Path(os.path.expanduser("~/.hermes/commons/journals"))
-LUCID_JOURNALS_DIR = Path(os.path.expanduser("~/.hermes/commons/journals/ocas-lucid"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
+DATA_DIR = HERMES_HOME / "commons" / "data" / "ocas-lucid"
+JOURNALS_DIR = HERMES_HOME / "commons" / "journals"
+LUCID_JOURNALS_DIR = JOURNALS_DIR / "ocas-lucid"
 CONFIG_PATH = DATA_DIR / "config.json"
 INGESTION_LOG_PATH = DATA_DIR / "ingestion_log.jsonl"
 DECISIONS_PATH = DATA_DIR / "decisions.jsonl"
