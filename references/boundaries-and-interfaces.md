@@ -1,96 +1,86 @@
 # Skill Boundaries and Interfaces
 
-Ownership rules and the read/write/query surface for the Lucid dream cycle.
-Read this when deciding whether Lucid or an adjacent skill should handle a
-task, or when wiring a new consumer of Lucid's output.
+Ownership rules and the read/write/query surface for the Lucid curation cycle.
 
 ## Responsibility boundary
 
-Legacy Lucid owns: nightly journal scanning, legacy MemPalace filing (drawers + KG),
-relevance classification, weak signal recirculation, and re-emergence detection.
+Lucid owns:
 
-The `dreaming/` package is shared infrastructure with hard-separated
-`relationship` and `self` namespaces. Domain ownership remains elsewhere.
+- nightly read-only scanning of OCAS journals;
+- relevance classification;
+- recirculation and re-emergence detection;
+- provider-independent curated journal artifacts;
+- optional principal-scoped memory candidates when the source journal already carries an explicit principal.
 
-Lucid does **not** own:
+Lucid does not own:
 
 | Concern | Owner |
-|---------|-------|
-| Canonical interaction/world evidence | Chronicle |
-| User interaction-pattern evidence | Chronicle |
-| Relationship posture/adaptation | Dreaming relationship domain |
-| Indigo identity evolution | Autobio/SOUL |
-| Social graph updates | Weave only |
+|---|---|
+| Durable memory acceptance, contradiction handling, retrieval, correction, forgetting | Chronicle |
+| Agent autobiographical identity and self-dreaming | Agent autobiographical growth subsystem |
+| Agent behavioral adaptation | Praxis |
+| Social graph updates | Weave |
 | Skill performance evaluation | Mentor |
-| Entity identity resolution | Chronicle |
 
-## Adjacent boundaries
+## Journal boundary
 
-Chronicle is the active canonical memory/evidence system. Relationship Dreaming
-may consume Chronicle event ids and descriptive interaction patterns but does
-not write user facts back as relationship policy.
+Lucid reads source journals as immutable evidence. It never edits or deletes them.
 
-Historical Elephas/MemPalace integration notes below are retained only for
-legacy-curator recovery. Elephas is not an active owner in the current
-architecture.
+A curated Lucid journal is a derived evidence artifact, not proof that durable memory was accepted.
 
-### Elephas pipeline as a Lucid input source
+If the source journal has no explicit principal, Lucid writes the curated artifact with no memory candidate. It MUST NOT infer that the user is the owner.
 
-The canonical `elephas_cron_run.py` writes run journals to
-`<fs-root>/commons/journals/ocas-elephas/`, which is **not** in Lucid's scan
-path. Other OCAS skills' journals (mentor, vesper, scout) that Elephas reads
-from the shared `<fs-root>/commons/journals/` path **are** in Lucid's scope.
+## Chronicle boundary
 
-When running elephas directly (not via the `ocas-elephas` skill), see
-`references/elephas-pipeline-gotchas.md` for the expected unprocessed residual
-pattern and the nested entity extraction gap.
+Lucid does not open Chronicle's database and does not call a private storage API.
 
-### Elephas JSON parse errors
+When a source journal carries an explicit principal, Lucid may attach a principal-scoped candidate to the curated artifact. Sanctioned Chronicle ingestion independently decides whether and how to persist it.
 
-`elephas_cron_pipeline.py` skips ~43% of `mentor-light-*` files due to
-malformed JSON (trailing commas, unescaped newlines in `notes` fields). This
-is a **producer-side bug in `ocas-mentor`**, not an elephas pipeline bug. Lucid
-handles it gracefully via try/except. See
-`references/elephas-pipeline-json-errors.md` for the full error pattern, root
-cause, and recommended non-mitigation.
+A Chronicle outage therefore does not invalidate Lucid's classification work. The curated artifact remains retryable evidence.
 
-## Optional / legacy cooperation
+## User vs agent memory
 
-- **Chronicle**: the new Dreaming relationship adapter consumes Chronicle's
-  descriptive interaction patterns and authoritative event ids.
-- **Autobio**: the new Dreaming self adapter stages Autobio observation ids in
-  the self namespace; it never writes SOUL.
-- **MemPalace / Elephas**: legacy-curator dependencies only. They are not
-  current architecture owners and new Dreaming code must not depend on them.
+User-directed curation and agent autobiography remain separate.
 
-## Inter-skill interfaces
+- User-owned candidates require user-grounded provenance and an explicit user principal.
+- Agent-owned journals may be curated as evidence but are never silently converted into user memory.
+- Agent autobiographical consumers may read agent-owned journal evidence through documented journal interfaces.
 
-**Reads (all read-only):**
+## Inter-component interfaces
 
-- All skill journals from `{agent_root}/commons/journals/` (same access
-  pattern as Mentor and Elephas)
+Reads:
 
-**Writes:**
+- `{agent_root}/commons/journals/**` read-only;
+- Lucid's own config, decision, evidence and ingestion state.
 
-- MemPalace drawers and KG via MCP tools (external)
-- Signal payload field in Lucid's own dream journal (standard Signal schema
-  from `spec-ocas-shared-schemas.md`)
-- Lucid's own journal, data, and decisions files only
+Writes:
 
-**Queries:**
+- `{agent_root}/commons/data/ocas-lucid/**`;
+- `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/**`.
 
-- Read: `mempalace_status`, `mempalace_search`, `mempalace_check_duplicate`,
-  `mempalace_get_taxonomy`
-- Write: `mempalace_add_drawer`, `mempalace_kg_add`, `mempalace_kg_invalidate`
-- Optional: `elephas.query` (pre-emission entity existence check)
+Lucid never writes another component's private data directory.
 
-## Ontology mapping
+## Candidate fields
 
-Lucid extracts no entities from user data directly. It classifies and routes
-journal content produced by other skills. When it emits Signals to Elephas, the
-Signal's `payload.type` reflects the entity type found in the source journal
-(Person, Place, Concept, etc.) per `spec-ocas-ontology.md`.
+A memory candidate includes at minimum:
 
-## Visibility
+- target principal;
+- claim state;
+- derivation type;
+- confidence;
+- source component;
+- source journal;
+- source provenance.
 
-public
+Repeated summaries of one source remain one evidence lineage.
+
+## Failure semantics
+
+- malformed source journal: record read error and continue;
+- curated artifact write failure: do not claim successful filing for that source;
+- Chronicle unavailable: non-fatal to Lucid; downstream ingestion retries separately;
+- missing principal: curate evidence with `memory_candidate: null`.
+
+## Correlation
+
+Curated artifacts preserve source journal path and run id. Multi-component workflows should also preserve correlation/causation ids when present in the source.
