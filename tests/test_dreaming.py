@@ -1,7 +1,11 @@
 import json
 import tempfile
 import unittest
+import sys
 from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
 
 from dreaming import DreamDomain, DreamKernel, EvidenceRef, JsonNamespaceStore
 from dreaming.autobio import propose_self_observation
