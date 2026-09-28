@@ -1,3 +1,15 @@
+## [4.2.0] - 2026-09-28
+
+### Added
+- Host-managed, idempotent cron reconciliation for `lucid:user-dream`, `lucid:self-dream`, and optional `lucid:curate`.
+- `scripts/lucid_init.py` to initialize Dreaming/legacy state and migrate the historical `lucid:dream` job in place.
+- `scripts/lucid_status.py` for Lucid cron plus per-principal/domain run-state inspection.
+- Cron reconciliation regression coverage.
+
+### Changed
+- Self-Dreaming is idempotent by Autobio observation source path; repeated scheduled runs become explicit no-ops.
+- Lucid is the single operational owner of Dreaming schedules; no separate Dreaming repository is required.
+
 ## [4.1.0] - 2026-09-27
 
 ### Changed

@@ -5,7 +5,7 @@
 Canonical OCAS Dreaming implementation. Runs principal-scoped User Dreaming and agent self-Dreaming with a shared, domain-isolated kernel.
 
 **Skill name:** `ocas-lucid`
-**Version:** 4.1.0
+**Version:** 4.2.0
 **Type:** Dreaming / offline consolidation
 **Layer:** Memory + Self Evolution
 **Author:** Indigo Karasu
@@ -43,10 +43,24 @@ See `references/dreaming-kernel.md`, `references/user-dreaming.md`,
 Direct scripts:
 
 ```bash
+python3 scripts/lucid_init.py --json
+python3 scripts/lucid_status.py --json
 python3 scripts/lucid_user_dream.py --json
 python3 scripts/lucid_self_dream.py --json
 python3 scripts/lucid_curate.py --json
 ```
+
+---
+
+## ⏱️ Scheduling
+
+Lucid owns its schedules. Run `python3 scripts/lucid_init.py --json` after install/update to reconcile them idempotently:
+
+- `lucid:user-dream` — daily 02:20 local.
+- `lucid:self-dream` — daily 00:05 local.
+- `lucid:curate` — legacy curator, retained only while still needed.
+
+An existing `lucid:dream` job is migrated in place to `lucid:curate` so its job identity/history are preserved. No second Dreaming repository or scheduler is required.
 
 ---
 

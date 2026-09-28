@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,9 +33,12 @@ class SelfDreamRun:
     started_at: str
     finished_at: str = ""
     source_path: str = ""
+    source_hash: str = ""
     promoted: int = 0
     held: int = 0
     blocked: int = 0
+    skipped: int = 0
+    skip_reason: str = ""
     candidate_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -44,9 +48,12 @@ class SelfDreamRun:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "source_path": self.source_path,
+            "source_hash": self.source_hash,
             "promoted": self.promoted,
             "held": self.held,
             "blocked": self.blocked,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
             "candidate_ids": list(self.candidate_ids),
         }
 
@@ -77,12 +84,28 @@ class SelfDreamRunner:
     def run_file(self, path: str | Path) -> SelfDreamRun:
         source = Path(path).expanduser().resolve()
         text = source.read_text(encoding="utf-8")
+        source_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
         result = SelfDreamRun(
             run_id=f"self-dream-{uuid.uuid4().hex[:12]}",
             principal_id=self.principal_id,
             started_at=_now(),
             source_path=str(source),
+            source_hash=source_hash,
         )
+
+        state = self.kernel.store.load(self.kernel.domain)
+        prior_runs = list(state.get("runs") or [])
+        if any(
+            str(run.get("source_path") or "") == str(source)
+            and str(run.get("source_hash") or "") == source_hash
+            for run in prior_runs
+        ):
+            result.skipped = 1
+            result.skip_reason = "observation content already processed"
+            result.finished_at = _now()
+            self.kernel.store.record_run(self.kernel.domain, result.to_dict())
+            return result
+
         candidate = propose_self_observation(
             self.kernel,
             observation_id=str(source),

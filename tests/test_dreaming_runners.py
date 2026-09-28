@@ -127,6 +127,31 @@ class RunnerTests(unittest.TestCase):
             )
         )
 
+    def test_self_dream_skips_same_observation_on_second_run(self):
+        root = Path(self.tmp.name) / "self-repeat-store"
+        store = JsonNamespaceStore(root, profile_id="indigo", principal_id="agent-1")
+        kernel = DreamKernel(DreamDomain.SELF, store)
+        obs = Path(self.tmp.name) / "repeat-observation.md"
+        obs.write_text(
+            "I noticed a repeated tendency to defer judgment even when the evidence was sufficient.",
+            encoding="utf-8",
+        )
+        runner = SelfDreamRunner(principal_id="agent-1", kernel=kernel)
+        first = runner.run_file(obs)
+        second = runner.run_file(obs)
+        self.assertEqual(first.promoted, 1)
+        self.assertEqual(second.skipped, 1)
+        self.assertEqual(second.skip_reason, "observation content already processed")
+        self.assertEqual(len(kernel.active()), 1)
+
+        obs.write_text(
+            "I noticed a repeated tendency to defer judgment, then deliberately changed the behavior.",
+            encoding="utf-8",
+        )
+        third = runner.run_file(obs)
+        self.assertEqual(third.promoted, 1)
+        self.assertEqual(third.skipped, 0)
+
     def test_self_dream_promotes_only_self_state(self):
         root = Path(self.tmp.name) / "self-store"
         store = JsonNamespaceStore(root, profile_id="indigo", principal_id="agent-1")
