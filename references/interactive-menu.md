@@ -1,26 +1,40 @@
 # Interactive Menu
 
-When invoked interactively (via `/` command), present a menu using the `clarify` tool so the user can pick which function to run.
+When Lucid is invoked interactively, present the subject-specific Dreaming
+operations first. Do not use the ambiguous historical `dream` label.
 
 ```python
 result = clarify(
-    question="What would you like to do?",
+    question="What would you like Lucid to do?",
     choices=[
-        "dream — Run the full dream cycle",
-        "status — Show system status",
-        "init — Initialize environment",
+        "user-dream — Consolidate user/relationship evidence from Chronicle",
+        "self-dream — Stage agent self-reflection from Autobio",
+        "status — Show Dreaming state and recent run status",
+        "curate — Run the legacy journal curator",
+        "init — Initialize Dreaming state / schedules",
         "update — Pull latest from GitHub",
     ]
 )
 ```
 
-After the user selects an action, execute it following the relevant procedure in this skill. Loop back to the menu after each action completes, until the user chooses to exit or sends `/stop`.
+## Routing
+
+- `user-dream` → `lucid.user-dream`
+- `self-dream` → `lucid.self-dream`
+- `curate` → `lucid.curate`
+- `status` → show both principal/domain states plus legacy curator status
+
+The menu must never collapse user and self Dreaming into one stateful run.
+A user may request both; execute them sequentially with independent principals
+and stores.
 
 ### Response parsing
 
-Match the user's response against the full choice string. If the response doesn't match any known choice (user typed free-form via "Other"), match key prefixes case-insensitively. Re-present the menu on no match.
+Match the user's response against the full choice string. If the response
+doesn't match any known choice, match key prefixes case-insensitively.
+Re-present the menu on no match.
 
 ### Platform adaptation
 
-On CLI, choices are navigable with arrow keys. On messaging platforms, choices render as a numbered list.
-
+On CLI, choices are navigable with arrow keys. On messaging platforms, choices
+render as a numbered list.
