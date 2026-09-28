@@ -49,7 +49,7 @@ def _state(home: str, profile: str, principal: str | None, domain: str):
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     payload = {
-        "cron": lucid_jobs_status(HermesCronCLI()),
+        "cron": lucid_jobs_status(HermesCronCLI(hermes_home=args.hermes_home)),
         "user": _state(args.hermes_home, args.profile, args.user_principal, "relationship"),
         "self": _state(args.hermes_home, args.profile, args.agent_principal, "self"),
     }
