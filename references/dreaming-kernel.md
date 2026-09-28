@@ -1,9 +1,8 @@
 # Shared Dreaming Kernel
 
-Lucid now contains the portable OCAS Dreaming kernel under `dreaming/`.
+Lucid is the canonical home of the OCAS Dreaming kernel under `dreaming/`.
 
-This is a migration boundary, not a claim that the legacy MemPalace journal
-curator and the new Dreaming system are the same responsibility.
+The historical journal curator is a legacy compatibility path (`lucid.curate`), not a separate owner of Dreaming.
 
 ## Two domains, one implementation
 
@@ -47,8 +46,6 @@ identity evolution and its existing framing contract ("Indigo is not Jared").
 
 ## Legacy Lucid curator
 
-The existing `lucid.dream` journal-curation cycle remains available during
-migration. It is a legacy compatibility surface and must not be expanded into
-user modeling or identity mutation. Its useful operational mechanics
+The historical journal-curation cycle remains available only as `lucid.curate` during migration. It must not be expanded into user modeling or identity mutation. Its useful operational mechanics
 (cursoring, re-emergence, stale-signal handling, duplicate avoidance and
 recovery) may be migrated into their owning systems over time.
