@@ -119,8 +119,7 @@ class HermesCronCLI:
             spec.name,
             "--deliver",
             spec.deliver,
-            "--clear-skills",
-            "--add-skill",
+            "--skill",
             spec.skill,
         )
         if proc.returncode:
