@@ -2,45 +2,51 @@
 
   <img src="./assets/readme/hero.jpg" width="100%" alt="Lucid">
 
-Nightly journal curator. Batch-processes OCAS skill journals via relevance
+Canonical OCAS Dreaming implementation. Runs principal-scoped User Dreaming and agent self-Dreaming with a shared, domain-isolated kernel.
 
 **Skill name:** `ocas-lucid`
-**Version:** 4.0.0
-**Type:** 
-**Layer:** Execution
+**Version:** 4.1.0
+**Type:** Dreaming / offline consolidation
+**Layer:** Memory + Self Evolution
 **Author:** Indigo Karasu
 
 ---
 
 ## 📖 Overview
 
-Nightly journal curator. Batch-processes OCAS skill journals via relevance
+Lucid is the canonical home of OCAS Dreaming. One repository provides a shared
+Dreaming kernel with two hard-separated domains:
 
----
+- **User Dreaming** — Chronicle-grounded consolidation of user-owned
+  relationship/preferences into durable Chronicle memory.
+- **Self Dreaming** — Autobio-grounded staging of agent self-insight for later
+  Autobio/SOUL distillation.
 
-## Shared Dreaming kernel
+The implementation is shared; state, principals, evidence rules, and promotion
+authority are not.
 
-Lucid now also hosts the reusable OCAS Dreaming kernel under `dreaming/`.
-It provides domain-separated candidate state and gate-before-promotion for two
-consumers: user/relationship consolidation (Chronicle evidence -> staged user-owned relationship interpretation)
-and Autobio self-reflection (behavior evidence -> staged self insight).
-The two domains share implementation but never state. See
-`references/dreaming-kernel.md`.
+The historical journal-curation cycle is retained only as `lucid.curate`
+during migration. It is no longer what "Dreaming" means in Lucid.
 
-The existing nightly journal curator remains a legacy compatibility surface
-during migration; it is not the owner of user modeling or Indigo identity.
+See `references/dreaming-kernel.md`, `references/user-dreaming.md`,
+`references/self-dreaming.md`, and `references/dreaming-scheduling.md`.
 
 ## 🔧 Commands
 
-- `lucid.status` to check last run, pending journals, filing stats
-- `lucid.dream` -- run the full dream cycle immediately, ignoring the time gate
-- `lucid.status` -- last run timestamp, journals pending, cumulative filing stats, streak count
-- `lucid.init` -- create storage directories, initialize config and logs, register cron jobs
-- `lucid.update` -- pull latest from GitHub source; preserves journals and data
-- Curated journal artifacts are written under `commons/journals/ocas-lucid/`.
-- Principal-scoped memory candidates are emitted only when the source journal explicitly identifies its principal.
-- Chronicle ingestion is downstream; Lucid does not open or mutate Chronicle storage directly.
-- **`re_evaluations` can be `null` (not 0)** in older queue entries. Always use `e.get('re_evaluations') or 0` when comparing. Direct `>= 3` comparison against `null` returns `False` in Python and silently skips cleanup.
+- `lucid.user-dream` — run User Dreaming immediately.
+- `lucid.self-dream` — run self-Dreaming immediately.
+- `lucid.curate` — run the legacy journal curator compatibility cycle.
+- `lucid.status` — inspect Dreaming run state and legacy curator state.
+- `lucid.init` — initialize principal-scoped Dreaming state and register jobs.
+- `lucid.update` — update the Lucid skill without deleting state.
+
+Direct scripts:
+
+```bash
+python3 scripts/lucid_user_dream.py --json
+python3 scripts/lucid_self_dream.py --json
+python3 scripts/lucid_curate.py --json
+```
 
 ---
 
