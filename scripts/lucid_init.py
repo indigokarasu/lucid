@@ -109,7 +109,7 @@ def main(argv=None) -> int:
         keep_legacy_curator=not args.no_legacy_curator,
     )
     result = reconcile(
-        HermesCronCLI(executable=args.hermes),
+        HermesCronCLI(executable=args.hermes, hermes_home=args.hermes_home),
         keep_legacy_curator=not args.no_legacy_curator,
     )
     result["state"] = state
