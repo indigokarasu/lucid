@@ -19,7 +19,7 @@ triggers:
 - lucid.update
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: "3.2.0"
+  version: "3.3.0"
   hermes:
     tags:
     - journaling
@@ -31,6 +31,9 @@ metadata:
 ---
 
 # Lucid
+
+> **Dreaming transition:** the reusable OCAS Dreaming kernel now lives in `dreaming/`. The existing journal-curation cycle below remains a legacy compatibility surface. User/relationship Dreaming is downstream of Chronicle evidence and remains user-principal owned; Indigo self-evolution remains owned by Autobio/SOUL. See `references/dreaming-kernel.md`.
+
 
 Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
 by relevance, and writes curated content to Lucid's journal files. The configured memory
@@ -104,10 +107,12 @@ in `references/error-handling.md`.
 
 ## Responsibility boundary
 
-Lucid owns nightly journal scanning, MemPalace filing, relevance
-classification, recirculation, and re-emergence. It does **not** own Chronicle
-writes (Elephas), social graph updates (Weave), real-time pattern analysis
-(Corvus), skill evaluation (Mentor), or entity identity resolution (Elephas).
+The legacy Lucid curator owns nightly journal scanning, legacy MemPalace filing,
+relevance classification, recirculation, and re-emergence. The new `dreaming/`
+package is shared infrastructure, not an owner of user facts or Indigo identity.
+Lucid does **not** own Chronicle evidence, social graph updates (Weave),
+user-pattern mining (Chronicle), skill evaluation (Mentor), user/relationship interpretation outside the User Dreaming contract, or Indigo identity
+evolution (Autobio/SOUL).
 
 Read `references/boundaries-and-interfaces.md` when deciding which skill should
 handle a task, when Elephas is run manually (update the `config.json` cursor to

@@ -18,6 +18,18 @@ Nightly journal curator. Batch-processes OCAS skill journals via relevance
 
 ---
 
+## Shared Dreaming kernel
+
+Lucid now also hosts the reusable OCAS Dreaming kernel under `dreaming/`.
+It provides domain-separated candidate state and gate-before-promotion for two
+consumers: user/relationship consolidation (Chronicle evidence -> staged user-owned relationship interpretation)
+and Autobio self-reflection (behavior evidence -> staged self insight).
+The two domains share implementation but never state. See
+`references/dreaming-kernel.md`.
+
+The existing nightly journal curator remains a legacy compatibility surface
+during migration; it is not the owner of user modeling or Indigo identity.
+
 ## 🔧 Commands
 
 - `lucid.status` to check last run, pending journals, filing stats

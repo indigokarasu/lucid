@@ -6,26 +6,33 @@ task, or when wiring a new consumer of Lucid's output.
 
 ## Responsibility boundary
 
-Lucid owns: nightly journal scanning, MemPalace filing (drawers + KG),
-relevance classification, weak signal recirculation, re-emergence detection.
+Legacy Lucid owns: nightly journal scanning, legacy MemPalace filing (drawers + KG),
+relevance classification, weak signal recirculation, and re-emergence detection.
+
+The `dreaming/` package is shared infrastructure with hard-separated
+`relationship` and `self` namespaces. Domain ownership remains elsewhere.
 
 Lucid does **not** own:
 
 | Concern | Owner |
 |---------|-------|
-| Chronicle writes | elephas-chronicle bridge pattern from the memory-system-design skill |
+| Canonical interaction/world evidence | Chronicle |
+| User interaction-pattern evidence | Chronicle |
+| Relationship posture/adaptation | Dreaming relationship domain |
+| Indigo identity evolution | Autobio/SOUL |
 | Social graph updates | Weave only |
-| Real-time pattern analysis | Corvus |
 | Skill performance evaluation | Mentor |
-| Entity identity resolution | Elephas |
+| Entity identity resolution | Chronicle |
 
 ## Adjacent boundaries
 
-Elephas also reads journals, but for structured entity extraction and Chronicle
-promotion. Lucid reads journals for verbatim preservation and semantic
-searchability via MemPalace. When elephas is run manually (the `ocas-elephas`
-skill is archived), update the `config.json` cursor to include new elephas
-journal files — otherwise Lucid re-processes them and double-files.
+Chronicle is the active canonical memory/evidence system. Relationship Dreaming
+may consume Chronicle event ids and descriptive interaction patterns but does
+not write user facts back as relationship policy.
+
+Historical Elephas/MemPalace integration notes below are retained only for
+legacy-curator recovery. Elephas is not an active owner in the current
+architecture.
 
 ### Elephas pipeline as a Lucid input source
 
@@ -47,14 +54,14 @@ handles it gracefully via try/except. See
 `references/elephas-pipeline-json-errors.md` for the full error pattern, root
 cause, and recommended non-mitigation.
 
-## Optional skill cooperation
+## Optional / legacy cooperation
 
-- **Elephas**: Lucid queries Chronicle via `elephas.query` to check whether an
-  entity already exists before emitting a Signal. If Elephas is unavailable,
-  Lucid emits the Signal anyway — Elephas deduplicates on ingestion.
-- **MemPalace**: **Required.** Lucid uses MemPalace MCP tools for all filing
-  operations. If MemPalace is unavailable, Lucid logs failures and skips filing
-  for that run (degraded mode; classification is still recorded).
+- **Chronicle**: the new Dreaming relationship adapter consumes Chronicle's
+  descriptive interaction patterns and authoritative event ids.
+- **Autobio**: the new Dreaming self adapter stages Autobio observation ids in
+  the self namespace; it never writes SOUL.
+- **MemPalace / Elephas**: legacy-curator dependencies only. They are not
+  current architecture owners and new Dreaming code must not depend on them.
 
 ## Inter-skill interfaces
 
