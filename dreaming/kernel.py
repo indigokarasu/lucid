@@ -151,32 +151,34 @@ class DreamKernel:
         reasons: list[str] | None = None,
     ) -> PromotionResult:
         reasons = list(reasons or [])
-        if candidate.domain != self.domain.value:
-            raise ValueError(
-                f"cross-domain promotion denied: candidate={candidate.domain} kernel={self.domain.value}"
-            )
         if decision not in {"promote", "hold", "block"}:
             raise ValueError("decision must be promote, hold, or block")
 
         state = self.store.load(self.domain)
-        if candidate.candidate_id not in state["candidates"]:
-            state["candidates"][candidate.candidate_id] = candidate.to_dict()
+        stored_raw = state["candidates"].get(candidate.candidate_id)
+        if stored_raw is None:
+            raise ValueError("candidate was not proposed in this domain")
+        stored = Candidate.from_dict(stored_raw)
+        if stored.domain != self.domain.value:
+            raise ValueError(
+                f"stored candidate namespace mismatch: candidate={stored.domain} kernel={self.domain.value}"
+            )
 
         promoted = False
         if decision == "promote":
-            if not candidate.evidence:
+            if not stored.evidence:
                 decision = "block"
                 reasons.append("candidate has no authoritative evidence references")
             else:
-                state["active"][candidate.candidate_id] = candidate.to_dict()
+                state["active"][stored.candidate_id] = stored.to_dict()
                 promoted = True
 
-        state["candidates"][candidate.candidate_id]["last_decision"] = decision
-        state["candidates"][candidate.candidate_id]["decision_reasons"] = reasons
+        state["candidates"][stored.candidate_id]["last_decision"] = decision
+        state["candidates"][stored.candidate_id]["decision_reasons"] = reasons
         self.store.save(self.domain, state)
         return PromotionResult(
-            candidate_id=candidate.candidate_id,
-            domain=self.domain.value,
+            candidate_id=stored.candidate_id,
+            domain=stored.domain,
             decision=decision,
             promoted=promoted,
             reasons=reasons,
