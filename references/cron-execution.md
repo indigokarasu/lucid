@@ -15,7 +15,7 @@ Recommended schedule: `10 3 * * *` local.
 The script:
 
 1. loads Chronicle through `ChronicleCore.get()`;
-2. resolves exactly one user principal, or requires `--principal`;
+2. resolves exactly one human relationship subject, or requires `--principal`;
 3. resumes from the prior User Dreaming Chronicle sequence watermark;
 4. reads Chronicle's descriptive interaction-pattern surface;
 5. rejects missing, non-human, or cross-principal source events;
