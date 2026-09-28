@@ -9,8 +9,7 @@ curator and the new Dreaming system are the same responsibility.
 
 The kernel is reusable infrastructure with two hard-separated namespaces:
 
-- `relationship` — evidence-backed learning about how the agent should work
-  with a particular user. Chronicle interaction patterns may seed candidates.
+- `relationship` — evidence-backed staging of user-owned relationship interpretations. Chronicle interaction patterns may seed candidates; promoted kernel state is not canonical memory or direct behavioral authority.
 - `self` — evidence-backed reflection about the agent's own behavior.
   Autobio may seed candidates; Autobio/SOUL remains the authority that decides
   whether a promoted self insight becomes identity.
@@ -36,9 +35,7 @@ evidence -> candidate -> gate decision -> promoted state
 `ChronicleCore.interaction_patterns`. Chronicle remains descriptive: it emits
 recurrence, confidence and event ids, not behavioral policy.
 
-Relationship Dreaming is responsible for interpreting those observations into
-scoped relationship posture and, in later stages, measuring whether an
-adaptation actually helped.
+The relationship domain stages interpretations for the User Dreaming contract. Durable accepted results belong to the user principal and must be written through Chronicle's sanctioned contract; any runtime relationship hint is a rebuildable projection from verified user-owned state, not a direct agent behavior shift.
 
 ## Autobio boundary
 
