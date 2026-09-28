@@ -1,7 +1,7 @@
 """Helpers for feeding Autobio observations into SELF Dreaming.
 
 This adapter does not write SOUL. Autobio remains the sole promotion authority
-for Indigo identity; the kernel only verifies and stages self-reflection state.
+for Indigo identity; the current boundary kernel stages and gates self-reflection state.
 """
 
 from __future__ import annotations
