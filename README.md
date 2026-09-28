@@ -5,7 +5,7 @@
 Nightly journal curator. Batch-processes OCAS skill journals via relevance
 
 **Skill name:** `ocas-lucid`
-**Version:** 3.0.0
+**Version:** 4.0.0
 **Type:** 
 **Layer:** Execution
 **Author:** Indigo Karasu
@@ -37,9 +37,9 @@ during migration; it is not the owner of user modeling or Indigo identity.
 - `lucid.status` -- last run timestamp, journals pending, cumulative filing stats, streak count
 - `lucid.init` -- create storage directories, initialize config and logs, register cron jobs
 - `lucid.update` -- pull latest from GitHub source; preserves journals and data
-- `mempalace_status`, `mempalace_search`, `mempalace_check_duplicate`, `mempalace_get_taxonomy` (read)
-- `mempalace_add_drawer`, `mempalace_kg_add`, `mempalace_kg_invalidate` (write)
-- `elephas.query` (optional, for pre-emission entity existence check)
+- Curated journal artifacts are written under `commons/journals/ocas-lucid/`.
+- Principal-scoped memory candidates are emitted only when the source journal explicitly identifies its principal.
+- Chronicle ingestion is downstream; Lucid does not open or mutate Chronicle storage directly.
 - **`re_evaluations` can be `null` (not 0)** in older queue entries. Always use `e.get('re_evaluations') or 0` when comparing. Direct `>= 3` comparison against `null` returns `False` in Python and silently skips cleanup.
 
 ---
