@@ -5,7 +5,7 @@
   "evals": [
     {
       "input": "Curate last night's skill journals",
-      "expected_output": "Batch-processes journals into MemPalace store with proper classification",
+      "expected_output": "Batch-processes journals into provider-independent curated artifacts with principal-safe memory candidates",
       "description": "Journal curation"
     },
     {
