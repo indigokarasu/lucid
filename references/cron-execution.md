@@ -1,3 +1,56 @@
+# Lucid Cron Execution
+
+Lucid owns three scheduled surfaces. The first two are the canonical Dreaming
+pipelines; the third is a temporary compatibility curator.
+
+## Canonical Dreaming jobs
+
+| Job | Schedule | Entry point |
+|---|---|---|
+| lucid:user-dream | 02:20 local daily | scripts/lucid_user_dream.py --json |
+| lucid:self-dream | 00:05 local daily | scripts/lucid_self_dream.py --json |
+| lucid:curate | 10:12 local daily, optional | scripts/lucid_curate.py --json |
+
+Do not hand-edit cron/jobs.json. Run:
+
+~~~bash
+python3 scripts/lucid_init.py --json
+~~~
+
+The initializer creates missing Lucid state, registers exactly one required job
+per Dreaming domain, removes duplicate canonical jobs, and migrates an existing
+lucid:dream job in place to lucid:curate when legacy curation is retained.
+
+To remove the legacy curator:
+
+~~~bash
+python3 scripts/lucid_init.py --no-legacy-curator --json
+~~~
+
+The scheduled jobs are ordinary Hermes cron jobs with the ocas-lucid skill
+attached. Their prompts execute the absolute path of the installed Lucid
+script, so they do not depend on a working directory or a guessed profile path.
+
+User Dreaming and self-Dreaming are independent scheduled processes. The old
+curator is never allowed to invoke either domain.
+
+## Runtime constraints
+
+- A non-zero User Dreaming exit is a failed run; durable Chronicle writes must
+  verify before Lucid promotes relationship state.
+- self-Dreaming is idempotent by Autobio observation source path. If the newest
+  observation was already processed, the run records an explicit no-op.
+- Candidate/held/blocked state is never injected as runtime truth.
+- The bare legacy paused boolean is not used to determine runnability; Hermes
+  scheduler state and paused_at remain authoritative.
+
+## Legacy curator execution details
+
+The remainder of this document describes lucid:curate only. It is not
+normative for User Dreaming or self-Dreaming.
+
+---
+
 # Cron Execution — Lucid Dreaming
 
 Lucid has two canonical Dreaming cron jobs and one optional legacy curator job.
