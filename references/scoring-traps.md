@@ -42,13 +42,15 @@ Top-level-only extraction misses ~80% of vesper content
 multi-path extraction. **Always use the updated extraction, not the simplified
 top-level version.**
 
-## MemPalace wing fallback
+## Principal eligibility is not classification confidence
 
-`mempalace_list_wings` may return only `root` even though the classification
-taxonomy defines wings like `wing_research`, `wing_knowledge`, etc. When this
-happens, file into `root/<room>` where `<room>` is the wing's topic slug
-(e.g., `root/preferences`, `root/operations`, `root/evolution`). Do not attempt
-to create custom wings via MCP — it is not supported.
+A high relevance score does not imply that a journal is eligible for durable
+personal memory. A curated artifact may be valuable evidence while carrying no
+explicit principal. In that case write the curated artifact with
+`memory_candidate: null`.
+
+Never infer the user principal from skill name, file location, or narrative
+content. The source journal must carry explicit principal ownership/provenance.
 
 ## Recirculation queue `re_evaluations` field
 
