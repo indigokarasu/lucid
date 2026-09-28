@@ -13,11 +13,15 @@ from dreaming.user import UserDreamRunner
 
 
 class FakeSource:
-    def __init__(self, patterns):
+    def __init__(self, patterns, watermark=0):
         self._patterns = patterns
+        self._watermark = watermark
 
     def patterns(self, **kwargs):
         return list(self._patterns)
+
+    def watermark(self):
+        return self._watermark
 
     @staticmethod
     def evidence_for(pattern):
@@ -45,7 +49,10 @@ class RunnerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.store = JsonNamespaceStore(
-            self.tmp.name, profile_id="indigo", principal_id="user-1"
+            self.tmp.name,
+            profile_id="indigo",
+            principal_id="agent-1",
+            subject_id="user-1",
         )
         self.kernel = DreamKernel(DreamDomain.RELATIONSHIP, self.store)
 
@@ -66,19 +73,24 @@ class RunnerTests(unittest.TestCase):
     def test_user_dream_promotes_only_after_verified_write(self):
         writer = GoodWriter()
         run = UserDreamRunner(
-            principal_id="user-1",
+            owner_principal_id="agent-1",
+            user_subject_id="user-1",
             kernel=self.kernel,
-            source=FakeSource([self.pattern()]),
+            source=FakeSource([self.pattern()], watermark=44),
             writer=writer,
         ).run()
         self.assertEqual(run.promoted, 1)
         self.assertEqual(run.durable_writes, ["chronicle-write-1"])
         self.assertEqual(len(self.kernel.active()), 1)
         self.assertEqual(len(writer.calls), 1)
+        self.assertEqual(run.last_seq, 44)
+        self.assertEqual(run.owner_principal_id, "agent-1")
+        self.assertEqual(run.user_subject_id, "user-1")
 
     def test_unverified_write_holds_candidate(self):
         run = UserDreamRunner(
-            principal_id="user-1",
+            owner_principal_id="agent-1",
+            user_subject_id="user-1",
             kernel=self.kernel,
             source=FakeSource([self.pattern()]),
             writer=BadWriter(),
@@ -92,7 +104,8 @@ class RunnerTests(unittest.TestCase):
         pattern["confidence"] = 0.4
         writer = GoodWriter()
         run = UserDreamRunner(
-            principal_id="user-1",
+            owner_principal_id="agent-1",
+            user_subject_id="user-1",
             kernel=self.kernel,
             source=FakeSource([pattern]),
             writer=writer,
@@ -110,26 +123,63 @@ class RunnerTests(unittest.TestCase):
             source="test",
         )
         other = JsonNamespaceStore(
-            self.tmp.name, profile_id="indigo", principal_id="user-2"
+            self.tmp.name,
+            profile_id="indigo",
+            principal_id="agent-2",
+            subject_id="user-1",
         )
         with self.assertRaises(ValueError):
             other.load(DreamDomain.RELATIONSHIP)
 
-    def test_runtime_scope_places_state_under_principal(self):
+    def test_runtime_scope_places_state_under_owner_and_subject(self):
         scope = DreamScope.from_values(
             hermes_home=self.tmp.name,
             profile_id="indigo",
-            principal_id="user-1",
+            principal_id="agent-1",
+            subject_id="user-1",
         )
         self.assertTrue(
             str(scope.state_root).endswith(
-                "commons/data/dreaming/profiles/indigo/principals/user-1"
+                "commons/data/dreaming/profiles/indigo/principals/agent-1/subjects/user-1"
             )
         )
 
+    def test_store_rejects_other_subject_state(self):
+        self.kernel.propose(
+            kind="x",
+            text="candidate",
+            confidence=0.8,
+            evidence=[EvidenceRef("chronicle_event", "e1")],
+            source="test",
+        )
+        other = JsonNamespaceStore(
+            self.tmp.name,
+            profile_id="indigo",
+            principal_id="agent-1",
+            subject_id="user-2",
+        )
+        with self.assertRaises(ValueError):
+            other.load(DreamDomain.RELATIONSHIP)
+
+    def test_no_pattern_still_advances_watermark(self):
+        run = UserDreamRunner(
+            owner_principal_id="agent-1",
+            user_subject_id="user-1",
+            kernel=self.kernel,
+            source=FakeSource([], watermark=91),
+            writer=GoodWriter(),
+        ).run(since_seq=44)
+        self.assertEqual(run.last_seq, 91)
+        self.assertEqual(run.proposed, 0)
+
     def test_self_dream_promotes_only_self_state(self):
         root = Path(self.tmp.name) / "self-store"
-        store = JsonNamespaceStore(root, profile_id="indigo", principal_id="agent-1")
+        store = JsonNamespaceStore(
+            root,
+            profile_id="indigo",
+            principal_id="agent-1",
+            subject_id="agent-1",
+        )
         kernel = DreamKernel(DreamDomain.SELF, store)
         obs = Path(self.tmp.name) / "2026-09-27.md"
         obs.write_text(
