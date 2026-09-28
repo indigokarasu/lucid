@@ -1,3 +1,17 @@
+## [4.1.0] - 2026-09-27
+
+### Changed
+- Lucid is now the canonical OCAS Dreaming implementation rather than primarily a journal curator.
+- Added explicit, domain-separated User Dreaming and self-Dreaming execution paths.
+- Renamed the historical journal-curation meaning to `lucid.curate`.
+
+### Added
+- Principal-scoped Dreaming state under `commons/data/dreaming/profiles/<profile>/principals/<principal>/`.
+- User Dreaming runner with Chronicle watermarking, evidence validation, durable Chronicle write/read-back verification, and promote-after-write semantics.
+- Self Dreaming runner for Autobio observations; promotions remain evidence for Autobio and never edit SOUL.
+- Subject-specific cron scripts and scheduling contracts.
+- Regression tests for durable-write-before-promotion and cross-principal/domain isolation.
+
 ## [3.2.0] - 2026-09-26
 
 ### Fixed
