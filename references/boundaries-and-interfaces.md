@@ -1,86 +1,92 @@
 # Skill Boundaries and Interfaces
 
-Ownership rules and the read/write/query surface for the Lucid curation cycle.
+Lucid is the canonical OCAS Dreaming implementation. It owns shared Dreaming
+mechanics and two isolated execution domains; it does not own the canonical
+stores those domains feed.
 
-## Responsibility boundary
+## Ownership
 
 Lucid owns:
 
-- nightly read-only scanning of OCAS journals;
-- relevance classification;
-- recirculation and re-emergence detection;
-- provider-independent curated journal artifacts;
-- optional principal-scoped memory candidates when the source journal already carries an explicit principal.
+- User Dreaming orchestration;
+- self-Dreaming orchestration;
+- principal/domain-isolated candidate state;
+- gate-before-promotion;
+- Dreaming run/watermark state;
+- Chronicle and Autobio adapters;
+- the optional legacy curator compatibility path.
 
 Lucid does not own:
 
 | Concern | Owner |
 |---|---|
-| Durable memory acceptance, contradiction handling, retrieval, correction, forgetting | Chronicle |
-| Agent autobiographical identity and self-dreaming | Agent autobiographical growth subsystem |
-| Agent behavioral adaptation | Praxis |
-| Social graph updates | Weave |
-| Skill performance evaluation | Mentor |
+| Canonical interaction/world evidence | Chronicle |
+| Durable user memory, contradiction, correction, forgetting | Chronicle |
+| Descriptive user interaction-pattern mining | Chronicle |
+| Agent autobiography / SOUL | Autobio/SOUL |
+| Agent/system behavioral adaptation | Finch/Praxis |
+| Skill evaluation | Mentor/Fellow |
+| Skill implementation | Forge |
+| Social graph | Weave |
 
-## Journal boundary
+## User Dreaming boundary
 
-Lucid reads source journals as immutable evidence. It never edits or deletes them.
+User Dreaming consumes only user-grounded Chronicle evidence. Every durable
+result:
 
-A curated Lucid journal is a derived evidence artifact, not proof that durable memory was accepted.
+- targets an explicit user principal;
+- preserves Chronicle source event ids;
+- is committed through Chronicle's atomic append/reducer path;
+- is read back and verified before Lucid promotion;
+- remains user memory, never agent identity.
 
-If the source journal has no explicit principal, Lucid writes the curated artifact with no memory candidate. It MUST NOT infer that the user is the owner.
+Lucid never writes Chronicle SQLite directly.
 
-## Chronicle boundary
+If Chronicle has multiple user principals and none is explicitly selected,
+Lucid stops.
 
-Lucid does not open Chronicle's database and does not call a private storage API.
+## Self Dreaming boundary
 
-When a source journal carries an explicit principal, Lucid may attach a principal-scoped candidate to the curated artifact. Sanctioned Chronicle ingestion independently decides whether and how to persist it.
+Self Dreaming consumes Autobio observations and stages only the `self` domain.
 
-A Chronicle outage therefore does not invalidate Lucid's classification work. The curated artifact remains retryable evidence.
+A promoted self candidate means "eligible evidence for Autobio". It does not
+edit character files, principles, or SOUL. Autobio remains the identity
+authority.
 
-## User vs agent memory
+User/relationship candidates are forbidden from self promotion.
 
-User-directed curation and agent autobiography remain separate.
+## State boundary
 
-- User-owned candidates require user-grounded provenance and an explicit user principal.
-- Agent-owned journals may be curated as evidence but are never silently converted into user memory.
-- Agent autobiographical consumers may read agent-owned journal evidence through documented journal interfaces.
+Dreaming state is process/audit state:
 
-## Inter-component interfaces
+```
+<hermes-home>/commons/data/dreaming/
+  profiles/<profile_id>/
+    principals/<subject_principal_id>/
+      relationship.json
+      self.json
+```
 
-Reads:
+The store records and validates profile/principal identity on every load/save.
+Cross-principal and cross-domain access is rejected.
 
-- `{agent_root}/commons/journals/**` read-only;
-- Lucid's own config, decision, evidence and ingestion state.
+## Legacy curator boundary
 
-Writes:
+`lucid.curate` may continue to scan journals and write Lucid-owned curated
+artifacts during migration. It is not User Dreaming or self-Dreaming.
 
-- `{agent_root}/commons/data/ocas-lucid/**`;
-- `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/**`.
+It must not:
 
-Lucid never writes another component's private data directory.
-
-## Candidate fields
-
-A memory candidate includes at minimum:
-
-- target principal;
-- claim state;
-- derivation type;
-- confidence;
-- source component;
-- source journal;
-- source provenance.
-
-Repeated summaries of one source remain one evidence lineage.
+- write retired MemPalace/Elephas stores;
+- infer a user principal from an unattributed journal;
+- write SOUL;
+- turn curator output into fresh independent evidence for User Dreaming.
 
 ## Failure semantics
 
-- malformed source journal: record read error and continue;
-- curated artifact write failure: do not claim successful filing for that source;
-- Chronicle unavailable: non-fatal to Lucid; downstream ingestion retries separately;
-- missing principal: curate evidence with `memory_candidate: null`.
-
-## Correlation
-
-Curated artifacts preserve source journal path and run id. Multi-component workflows should also preserve correlation/causation ids when present in the source.
+- Chronicle evidence missing/cross-principal: reject candidate.
+- Chronicle durable write failure: hold candidate; do not promote.
+- Chronicle read-back verification failure: hold candidate.
+- Missing Autobio observation: fail self-Dreaming; do not fabricate.
+- Principal ambiguity: fail closed.
+- Legacy curator failure: does not alter User/Self Dreaming state.

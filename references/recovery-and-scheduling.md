@@ -1,49 +1,74 @@
 # Recovery, Scheduling, and OKRs
 
-Operational contracts that apply to every run rather than to one phase.
-Read this when a run was missed, when the evidence log looks wrong, or during
-OKR evaluation.
+Operational contracts for Lucid's canonical Dreaming pipelines and the legacy
+curator compatibility path.
 
-## Recovery behavior
+## User Dreaming recovery
 
-Implements the recovery contract from `spec-ocas-recovery.md`.
+User Dreaming records every run in the target user principal's relationship
+state:
 
-- **Evidence** — every dream cycle appends a record to
-  `{agent_root}/commons/data/ocas-lucid/evidence.jsonl`, including skip and
-  hibernation runs. `not_activity_reason` is mandatory when no side effects
-  occur.
-- **Gap detection** — on every wake, check the evidence log. If the gap exceeds
-  24h for a dream cycle, log `gap_detected` and run a catch-up pass (capped at
-  40 journals).
-- **Downstream-memory degradation** — Chronicle ingestion unavailability does not block Lucid classification or curated journal writes. Retry ingestion downstream. When journal sources are
-  missing, continue with the available sources.
-- **Log compaction** — ingestion logs older than 30 days (no-op) or 90 days
-  (error/gap) are compacted. Last 7 days are retained.
+```
+<hermes-home>/commons/data/dreaming/
+  profiles/<profile_id>/
+    principals/<user-principal>/
+      relationship.json
+```
 
-## Background jobs
+Each run records a Chronicle sequence watermark. The next run resumes from the
+highest recorded `last_seq`. Re-running without new Chronicle evidence does
+not increase confidence.
 
-| Job name | Mechanism | Schedule | Command |
-|----------|-----------|----------|---------|
-| `lucid:dream` | cron | `0 3 * * *` (3am local) | `lucid.dream` |
-| `lucid:update` | cron | `0 0 * * *` (midnight daily) | `lucid.update` |
+If a Chronicle durable write fails or cannot be read back and verified, the
+candidate remains `hold`; it is not promoted. The command returns non-zero
+when a write raised an error.
 
-### Schedule gap recovery
+## Self Dreaming recovery
 
-If the system was asleep at the 3am `lucid:dream` run, the morning gap
-detector re-processes the missed run. On the next wake / morning invocation,
-check whether a dream cycle ran for the expected date (scan the run journal
-directory for the target `YYYY-MM-DD`); if absent, run `lucid.dream` once to
-catch up. Log the gap (`schedule_gap=missed→recovered`) and optionally batch
-with `lucid:update` so the missed nightly curation still lands the same day.
+Self Dreaming records each source observation path and run under the agent
+principal's `self.json`. Running the same observation again produces the same
+candidate id; promotion remains self-domain staging only.
 
-## Re-emergence detection and stale handling
+A missing Autobio observation is a run failure. It must not be replaced with an
+invented or user-domain observation.
 
-See `re-emergence.md` for the full algorithm: a 3+ journal threshold with
-auto-promotion, and two-pass stale handling (mark on the first contradiction,
-invalidate on second confirmation).
+## Required background jobs
+
+| Job | Schedule | Command |
+|---|---|---|
+| `lucid:user-dream` | daily 03:10 local | `python3 scripts/lucid_user_dream.py --json` |
+| `lucid:self-dream` | daily 00:15 local | `python3 scripts/lucid_self_dream.py --json` |
+
+The deployment should schedule Autobio's daily micro-distillation after
+`lucid:self-dream` if same-day self insight is expected to participate in the
+distillation.
+
+## Legacy curator
+
+The old journal curator remains optional as `lucid:curate`.
+
+Its recovery contract is unchanged:
+
+- every curator cycle appends an evidence record under
+  `commons/data/ocas-lucid/evidence.jsonl`;
+- ingestion/cursor state resumes from prior processed paths;
+- a missed curator cycle can be run once on the next wake;
+- Chronicle unavailability does not authorize direct database or retired
+  MemPalace writes.
+
+The legacy curator is not a substitute for either Dreaming job.
 
 ## OKR evaluation
 
-Universal OKRs per `spec-ocas-journal.md`, plus skill-specific targets. See
-`okr.md` for the full table: ingestion coverage, duplicate avoidance,
-recirculation, Signal precision, schedule adherence, data integrity.
+Dreaming OKRs should separately measure:
+
+- user-principal provenance validity;
+- cross-principal rejection;
+- durable-write verification;
+- candidate hold/block/promote rates;
+- watermark continuity;
+- self/user domain isolation;
+- Autobio consumption of promoted self evidence.
+
+Legacy curator OKRs remain documented in `okr.md` until that compatibility
+surface is removed.

@@ -16,10 +16,12 @@ jobs:
       # The dream cycle template must stay dependency-free and importable, and
       # its CLI must stay inspectable without executing a cycle.
       - name: Byte-compile
-        run: python3 -m py_compile scripts/lucid_dream_template.py dreaming/*.py
+        run: python3 -m py_compile scripts/lucid_dream_template.py scripts/lucid_curate.py scripts/lucid_user_dream.py scripts/lucid_self_dream.py dreaming/*.py
       - name: Bash syntax
         run: bash -n scripts/update.sh
       - name: Smoke tests
         run: python3 tests/test_smoke.py
       - name: Dreaming kernel tests
         run: python3 tests/test_dreaming.py
+      - name: Dreaming runner tests
+        run: python3 tests/test_dreaming_runners.py

@@ -76,8 +76,16 @@ class JsonNamespaceStore:
     into self state or vice versa.
     """
 
-    def __init__(self, root: str | os.PathLike[str]):
+    def __init__(
+        self,
+        root: str | os.PathLike[str],
+        *,
+        profile_id: str | None = None,
+        principal_id: str | None = None,
+    ):
         self.root = Path(root)
+        self.profile_id = profile_id
+        self.principal_id = principal_id
 
     def _path(self, domain: DreamDomain) -> Path:
         return self.root / f"{domain.value}.json"
@@ -85,22 +93,49 @@ class JsonNamespaceStore:
     def load(self, domain: DreamDomain) -> dict[str, Any]:
         path = self._path(domain)
         if not path.exists():
-            return {"domain": domain.value, "candidates": {}, "active": {}}
+            return {
+                "domain": domain.value,
+                "profile_id": self.profile_id,
+                "principal_id": self.principal_id,
+                "candidates": {},
+                "active": {},
+                "runs": [],
+            }
         value = json.loads(path.read_text(encoding="utf-8"))
         if value.get("domain") != domain.value:
             raise ValueError("dream state namespace mismatch")
+        if self.profile_id is not None and value.get("profile_id") not in (None, self.profile_id):
+            raise ValueError("dream state profile mismatch")
+        if self.principal_id is not None and value.get("principal_id") not in (None, self.principal_id):
+            raise ValueError("dream state principal mismatch")
+        value.setdefault("profile_id", self.profile_id)
+        value.setdefault("principal_id", self.principal_id)
         value.setdefault("candidates", {})
         value.setdefault("active", {})
+        value.setdefault("runs", [])
         return value
 
     def save(self, domain: DreamDomain, state: dict[str, Any]) -> None:
         if state.get("domain") != domain.value:
             raise ValueError("refusing to write cross-domain dream state")
+        if self.profile_id is not None and state.get("profile_id") not in (None, self.profile_id):
+            raise ValueError("refusing to write cross-profile dream state")
+        if self.principal_id is not None and state.get("principal_id") not in (None, self.principal_id):
+            raise ValueError("refusing to write cross-principal dream state")
+        state["profile_id"] = self.profile_id
+        state["principal_id"] = self.principal_id
         self.root.mkdir(parents=True, exist_ok=True)
         path = self._path(domain)
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         os.replace(tmp, path)
+
+    def record_run(self, domain: DreamDomain, record: dict[str, Any], *, keep: int = 200) -> None:
+        state = self.load(domain)
+        runs = list(state.get("runs") or [])
+        runs.append(dict(record))
+        state["runs"] = runs[-max(1, int(keep)):]
+        self.save(domain, state)
 
 
 class DreamKernel:
