@@ -35,6 +35,8 @@ class SelfDreamRun:
     promoted: int = 0
     held: int = 0
     blocked: int = 0
+    skipped: int = 0
+    skip_reason: str = ""
     candidate_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -47,6 +49,8 @@ class SelfDreamRun:
             "promoted": self.promoted,
             "held": self.held,
             "blocked": self.blocked,
+            "skipped": self.skipped,
+            "skip_reason": self.skip_reason,
             "candidate_ids": list(self.candidate_ids),
         }
 
@@ -83,6 +87,16 @@ class SelfDreamRunner:
             started_at=_now(),
             source_path=str(source),
         )
+
+        state = self.kernel.store.load(self.kernel.domain)
+        prior_runs = list(state.get("runs") or [])
+        if any(str(run.get("source_path") or "") == str(source) for run in prior_runs):
+            result.skipped = 1
+            result.skip_reason = "observation already processed"
+            result.finished_at = _now()
+            self.kernel.store.record_run(self.kernel.domain, result.to_dict())
+            return result
+
         candidate = propose_self_observation(
             self.kernel,
             observation_id=str(source),
