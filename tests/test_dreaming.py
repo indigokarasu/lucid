@@ -7,7 +7,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from dreaming import DreamDomain, DreamKernel, EvidenceRef, JsonNamespaceStore
+from dreaming import Candidate, DreamDomain, DreamKernel, EvidenceRef, JsonNamespaceStore
 from dreaming.autobio import propose_self_observation
 from dreaming.chronicle import ChroniclePatternSource
 
@@ -50,6 +50,42 @@ class DreamingKernelTests(unittest.TestCase):
         result = kernel.decide(c, decision="promote")
         self.assertEqual(result.decision, "block")
         self.assertFalse(result.promoted)
+
+    def test_unstaged_candidate_cannot_be_promoted(self):
+        kernel = DreamKernel(DreamDomain.RELATIONSHIP, self.store)
+        forged = Candidate(
+            candidate_id="dream_forged",
+            domain=DreamDomain.RELATIONSHIP.value,
+            kind="test",
+            text="forged",
+            confidence=1.0,
+            evidence=[EvidenceRef("chronicle_event", "e1")],
+            source="test",
+        )
+        with self.assertRaises(ValueError):
+            kernel.decide(forged, decision="promote")
+        self.assertEqual(kernel.active(), [])
+
+    def test_mutating_returned_candidate_does_not_change_promoted_record(self):
+        kernel = DreamKernel(DreamDomain.RELATIONSHIP, self.store)
+        candidate = kernel.propose(
+            kind="test",
+            text="staged text",
+            confidence=0.8,
+            evidence=[EvidenceRef("chronicle_event", "e1")],
+            source="test",
+        )
+        candidate.text = "mutated text"
+        candidate.evidence = []
+        candidate.domain = DreamDomain.SELF.value
+
+        result = kernel.decide(candidate, decision="promote")
+        self.assertTrue(result.promoted)
+        active = kernel.active()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].text, "staged text")
+        self.assertEqual(active[0].domain, DreamDomain.RELATIONSHIP.value)
+        self.assertEqual([e.ref_id for e in active[0].evidence], ["e1"])
 
     def test_relationship_and_self_state_are_separate(self):
         rel = DreamKernel(DreamDomain.RELATIONSHIP, self.store)
