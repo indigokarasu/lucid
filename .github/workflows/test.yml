@@ -25,3 +25,5 @@ jobs:
         run: python3 tests/test_dreaming.py
       - name: Dreaming runner tests
         run: python3 tests/test_dreaming_runners.py
+      - name: Chronicle adapter tests
+        run: python3 tests/test_chronicle_adapter.py
