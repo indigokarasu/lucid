@@ -56,8 +56,8 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 - Real-time memory filing during active sessions
 - Skill evaluation or improvement proposals (Mentor)
-- Behavioral pattern detection (Corvus)
-- Entity identity resolution (Elephas)
+- Agent behavioral adaptation (Praxis)
+- Direct Chronicle storage/identity mutation outside sanctioned Chronicle contracts
 - Inspecting a single known journal (just read the file)
 
 ## Dream cycle checklist
@@ -97,8 +97,8 @@ dream journal summary.
 |---------|---------|----------|
 | `config.json` missing | Script exits `2` before processing | Run `lucid.init`, then re-run. Do not hand-write a config — the cursor format is load-bearing for resumption. |
 | Source journal is malformed JSON | `read_error` recorded, score `-3`, run continues | Producer-side bug (commonly `ocas-mentor`). Do not patch the journal in place — the cursor will re-read it and the fix will be overwritten. |
-| MemPalace MCP unavailable | `degraded: mempalace` in evidence, `filed_count: 0` | **Expected, not fatal.** Decisions, ingestion log, and dream journal are still written. Filing is retried next run. |
-| MemPalace errors mid-batch | Per-call error logged, remaining journals continue | Queue for retry; never abort the batch — a partial run still advances the cursor usefully. |
+| Curated journal write fails | `curated_write_failed`; source journal remains evidence | Do not fabricate success; retry that source on the next repair pass. |
+| Chronicle ingestion unavailable | Curated journal still exists with optional candidate | Non-fatal to Lucid. Chronicle ingestion is downstream and independently recoverable. |
 | Backlog > 1000 journals, batch files nothing | `file_count: 0` across several runs | Cursor is buried in scan-heavy territory. Run a targeted pass over high-signal skills only (vesper, praxis, taste, custodian, dispatch). |
 | `update.sh` exits 3 | "worktree has uncommitted changes" | **Refusal, not a failure.** Commit or stash, or pass `--force` to discard deliberately. |
 
@@ -114,9 +114,7 @@ Lucid does **not** own Chronicle evidence, social graph updates (Weave),
 user-pattern mining (Chronicle), skill evaluation (Mentor), user/relationship interpretation outside the User Dreaming contract, or Indigo identity
 evolution (Autobio/SOUL).
 
-Read `references/boundaries-and-interfaces.md` when deciding which skill should
-handle a task, when Elephas is run manually (update the `config.json` cursor to
-avoid double-filing), or when wiring a new consumer of Lucid's output.
+Read `references/boundaries-and-interfaces.md` when deciding which component should handle a task or when wiring a new consumer of Lucid output.
 
 ## Commands
 
@@ -140,7 +138,7 @@ cycle to preview a batch before it advances the cursor.
 
 Implements the recovery contract from `spec-ocas-recovery.md`: an evidence
 record on every cycle (including skip/hibernation runs), >24h gap detection
-with a capped catch-up pass, degraded mode when MemPalace is unavailable, and
+with a capped catch-up pass, retryable curated-artifact failures, and
 30/90-day log compaction.
 
 See `references/recovery-and-scheduling.md` for the full contract, the cron
@@ -187,8 +185,7 @@ what cursor resumption matches on):
 ```
 
 **Dream journal** — `{journals}/ocas-lucid/2026-09-26/dream-20260926T030012Z.json`,
-`journal_spec_version "1.3"`, `type: "Action"` (MemPalace writes are external
-side effects). Carries the same counters plus `file_details`,
+`journal_spec_version "2.0"`, `type: "Observation"`. Carries the same counters plus `file_details`,
 `recirculate_details`, `skip_details`, `re_emergence_events`, and
 `signal_emissions`. Full schema in `references/dream-journal.md`.
 
@@ -218,13 +215,13 @@ See `references/safety-gates.md` for change magnitude gates (>30% warning, >50% 
 
 **Why these gates are rigid**: a filing decision that would rewrite more than
 half the indexed content is far more likely to be a misclassification than a
-genuine change, and an unrecoverable MemPalace write is the expensive failure.
+genuine change, and a lost or falsely acknowledged curated artifact is the expensive failure.
 Hibernation exists so a quiet night produces an explicit "no activity" record
 rather than an empty journal that later reads as a failed run.
 
 ## Dream journal output
 
-Journal type: Action (writes to MemPalace are external side effects). Written to `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json` using the standard JournalEntry schema with `journal_spec_version "1.3"`.
+Journal type: Observation. Written to `{agent_root}/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json` using JournalEntry v2 semantics and explicit principal metadata when a candidate is eligible.
 
 See `references/dream-journal.md` for the full journal schema (scan/file/skip counts, re-emergence events, Signal payload, skip path).
 
@@ -235,8 +232,7 @@ Universal OKRs per `spec-ocas-journal.md`, plus skill-specific targets. See `ref
 ## Inter-skill interfaces
 
 Reads all skill journals from `{agent_root}/commons/journals/` (read-only);
-writes MemPalace drawers/KG via MCP, the Signal payload in its own dream
-journal, and its own data files. Full read/write/query surface in
+writes only its own curated journals, candidate payloads, and private data files. Durable memory ingestion belongs to Chronicle sanctioned contracts. Full read/write/query surface in
 `references/boundaries-and-interfaces.md`.
 
 ## Background tasks
@@ -261,7 +257,7 @@ type found in the source journal (Person, Place, Concept, etc.) per
 
 Misclassification traps that have caused real duplicate writes and noise
 filings: ledger-before-re-filing, wall-clock run ids, payload-keys-are-not-
-content, nested narrative extraction, MemPalace wing fallback, `re_evaluations`
+content, nested narrative extraction, principal eligibility, `re_evaluations`
 null handling, and the buried-backlog targeted pass.
 
 Read `references/scoring-traps.md` when a run files the wrong thing, files
@@ -305,9 +301,7 @@ Two rules that are not obvious from the code:
 - **Sort by `(is_scan, skill_priority, filename)`, not alphabetically.**
   Alphabetical order puts scan/sweep journals first, so an early batch can be
   100% noise and file nothing.
-- **Never block the cycle on MemPalace.** It is a write-side dependency;
-  classification still has value when filing is unavailable, so degrade and
-  queue rather than abort.
+- **Never infer a user-memory owner.** Classification remains useful even when a source journal has no explicit principal. Curate the evidence, set `memory_candidate: null`, and let downstream principal-aware systems decide whether it is eligible for durable memory.
 
 See `references/cron-execution-detail.md` for the priority table, skill-level
 scan exceptions, the degraded-mode decision tree, and cron constraints.
