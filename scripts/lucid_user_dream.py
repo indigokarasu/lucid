@@ -16,7 +16,8 @@ from dreaming.chronicle import (
     ChronicleDreamWriter,
     ChroniclePatternSource,
     load_chronicle_core,
-    resolve_user_principal,
+    resolve_agent_principal,
+    resolve_user_subject,
 )
 from dreaming.runtime import DreamScope
 from dreaming.user import UserDreamRunner
@@ -26,7 +27,16 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Run Lucid User Dreaming")
     p.add_argument("--hermes-home", default=os.environ.get("HERMES_HOME", "~/.hermes"))
     p.add_argument("--profile", default=os.environ.get("HERMES_PROFILE", "indigo"))
-    p.add_argument("--principal", default=os.environ.get("LUCID_USER_PRINCIPAL"))
+    p.add_argument(
+        "--principal",
+        default=os.environ.get("LUCID_OWNER_PRINCIPAL"),
+        help="Chronicle owner agent principal",
+    )
+    p.add_argument(
+        "--user-subject",
+        default=os.environ.get("LUCID_USER_SUBJECT"),
+        help="Human relationship subject; required when multiple authors are present",
+    )
     p.add_argument("--since-seq", type=int)
     p.add_argument("--limit", type=int, default=5000)
     p.add_argument("--json", action="store_true")
@@ -36,11 +46,14 @@ def parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     core = load_chronicle_core(args.hermes_home)
-    principal = resolve_user_principal(core, args.principal)
+    owner_principal = resolve_agent_principal(core, args.principal)
+    user_subject = resolve_user_subject(core, owner_principal, args.user_subject)
+    allow_unattributed = args.user_subject is None
     scope = DreamScope.from_values(
         hermes_home=args.hermes_home,
         profile_id=args.profile,
-        principal_id=principal,
+        principal_id=owner_principal,
+        subject_id=user_subject,
     )
     kernel = scope.kernel("relationship")
     state = kernel.store.load(kernel.domain)
@@ -50,10 +63,21 @@ def main(argv=None) -> int:
     else:
         since_seq = args.since_seq
 
-    source = ChroniclePatternSource(core, principal_id=principal)
-    writer = ChronicleDreamWriter(core, principal_id=principal)
+    source = ChroniclePatternSource(
+        core,
+        owner_principal_id=owner_principal,
+        user_subject_id=user_subject,
+        allow_unattributed=allow_unattributed,
+    )
+    writer = ChronicleDreamWriter(
+        core,
+        owner_principal_id=owner_principal,
+        user_subject_id=user_subject,
+        allow_unattributed=allow_unattributed,
+    )
     result = UserDreamRunner(
-        principal_id=principal,
+        owner_principal_id=owner_principal,
+        user_subject_id=user_subject,
         kernel=kernel,
         source=source,
         writer=writer,
