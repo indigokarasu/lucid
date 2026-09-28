@@ -18,10 +18,11 @@ from .kernel import Candidate, DreamDomain, DreamKernel, EvidenceRef
 def load_chronicle_core(hermes_home: str | Path):
     """Load Chronicle through its normal core API in a standalone cron process."""
     home = Path(hermes_home).expanduser().resolve()
-    candidates = [
-        home / "plugins" / "chronicle",
-        home / "profiles" / "indigo" / "plugins" / "chronicle",
-    ]
+    candidates = [home / "plugins" / "chronicle"]
+    # A profile-scoped HERMES_HOME commonly looks like
+    # <root>/profiles/<profile>. Plugins may be shared at <root>/plugins.
+    if home.parent.name == "profiles":
+        candidates.append(home.parent.parent / "plugins" / "chronicle")
     for path in candidates:
         if path.exists() and str(path) not in sys.path:
             sys.path.insert(0, str(path))
@@ -29,7 +30,7 @@ def load_chronicle_core(hermes_home: str | Path):
         from engine.core import ChronicleCore
     except ImportError as exc:
         raise RuntimeError(
-            "Chronicle plugin is not importable; expected it under HERMES_HOME/plugins/chronicle"
+            "Chronicle plugin is not importable from the profile or shared HERMES_HOME plugin roots"
         ) from exc
     return ChronicleCore.get(str(home))
 
