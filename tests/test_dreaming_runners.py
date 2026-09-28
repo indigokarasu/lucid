@@ -141,8 +141,16 @@ class RunnerTests(unittest.TestCase):
         second = runner.run_file(obs)
         self.assertEqual(first.promoted, 1)
         self.assertEqual(second.skipped, 1)
-        self.assertEqual(second.skip_reason, "observation already processed")
+        self.assertEqual(second.skip_reason, "observation content already processed")
         self.assertEqual(len(kernel.active()), 1)
+
+        obs.write_text(
+            "I noticed a repeated tendency to defer judgment, then deliberately changed the behavior.",
+            encoding="utf-8",
+        )
+        third = runner.run_file(obs)
+        self.assertEqual(third.promoted, 1)
+        self.assertEqual(third.skipped, 0)
 
     def test_self_dream_promotes_only_self_state(self):
         root = Path(self.tmp.name) / "self-store"
