@@ -12,6 +12,8 @@ from .kernel import Candidate, DreamDomain, DreamKernel
 
 class PatternSource(Protocol):
     def patterns(self, **kwargs) -> list[dict[str, Any]]: ...
+    def evidence_for(self, pattern: dict[str, Any]): ...
+    def watermark(self) -> int: ...
 
 
 class DurableUserWriter(Protocol):
@@ -42,7 +44,8 @@ class UserGatePolicy:
 @dataclass
 class UserDreamRun:
     run_id: str
-    principal_id: str
+    owner_principal_id: str
+    user_subject_id: str
     started_at: str
     finished_at: str = ""
     seen_patterns: int = 0
@@ -57,7 +60,8 @@ class UserDreamRun:
     def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
-            "principal_id": self.principal_id,
+            "owner_principal_id": self.owner_principal_id,
+            "user_subject_id": self.user_subject_id,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "seen_patterns": self.seen_patterns,
@@ -86,7 +90,8 @@ class UserDreamRunner:
     def __init__(
         self,
         *,
-        principal_id: str,
+        owner_principal_id: str,
+        user_subject_id: str,
         kernel: DreamKernel,
         source: PatternSource,
         writer: DurableUserWriter,
@@ -94,7 +99,8 @@ class UserDreamRunner:
     ):
         if kernel.domain is not DreamDomain.RELATIONSHIP:
             raise ValueError("UserDreamRunner requires relationship domain")
-        self.principal_id = principal_id
+        self.owner_principal_id = owner_principal_id
+        self.user_subject_id = user_subject_id
         self.kernel = kernel
         self.source = source
         self.writer = writer
@@ -103,14 +109,15 @@ class UserDreamRunner:
     def run(self, *, since_seq: int = 0, limit: int = 5000) -> UserDreamRun:
         result = UserDreamRun(
             run_id=f"user-dream-{uuid.uuid4().hex[:12]}",
-            principal_id=self.principal_id,
+            owner_principal_id=self.owner_principal_id,
+            user_subject_id=self.user_subject_id,
             started_at=_now(),
         )
         patterns = self.source.patterns(since_seq=since_seq, limit=limit)
         result.seen_patterns = len(patterns)
+        result.last_seq = max(since_seq, int(self.source.watermark() or 0))
 
         for pattern in patterns:
-            result.last_seq = max(result.last_seq, int(pattern.get("last_seq") or 0))
             evidence = self.source.evidence_for(pattern)
             candidate = self.kernel.propose(
                 kind=f"interaction_pattern:{pattern.get('category', 'unknown')}",
