@@ -66,7 +66,7 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 ## User Dreaming checklist
 
-- [ ] Resolve exactly one target user principal (or require an explicit id).
+- [ ] Resolve exactly one target human relationship subject (or require an explicit id).
 - [ ] Read Chronicle descriptive interaction patterns since the last watermark.
 - [ ] Re-open authoritative Chronicle evidence; reject cross-principal evidence.
 - [ ] Stage a relationship-domain candidate.
