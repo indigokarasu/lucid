@@ -22,8 +22,23 @@ class FakePatterns:
         }]
 
 
+class FakeStore:
+    def __init__(self):
+        self.events = {
+            "evt1": {"event_id": "evt1", "seq": 10, "actor": "user", "owner": "agent-1", "session_id": "s1", "payload": "{}"},
+            "evt2": {"event_id": "evt2", "seq": 11, "actor": "user", "owner": "agent-1", "session_id": "s2", "payload": "{}"},
+        }
+
+    def get_event(self, event_id):
+        return self.events.get(event_id)
+
+    def max_seq(self):
+        return 11
+
+
 class FakeCore:
     interaction_patterns = FakePatterns()
+    store = FakeStore()
 
 
 class DreamingKernelTests(unittest.TestCase):
@@ -99,7 +114,11 @@ class DreamingKernelTests(unittest.TestCase):
 
     def test_chronicle_patterns_seed_relationship_candidates_with_event_refs(self):
         kernel = DreamKernel(DreamDomain.RELATIONSHIP, self.store)
-        candidates = ChroniclePatternSource(FakeCore()).propose(kernel)
+        candidates = ChroniclePatternSource(
+            FakeCore(),
+            owner_principal_id="agent-1",
+            user_subject_id="primary_user",
+        ).propose(kernel)
         self.assertEqual(len(candidates), 1)
         self.assertEqual([e.ref_id for e in candidates[0].evidence], ["evt1", "evt2"])
 
