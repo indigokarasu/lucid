@@ -15,7 +15,7 @@ Recommended schedule: `10 3 * * *` local.
 The script:
 
 1. loads Chronicle through `ChronicleCore.get()`;
-2. resolves exactly one human relationship subject, or requires `--principal`;
+2. resolves the Chronicle owner agent principal, then resolves one human relationship subject (or requires `--user-subject` when multiple explicit authors are present);
 3. resumes from the prior User Dreaming Chronicle sequence watermark;
 4. reads Chronicle's descriptive interaction-pattern surface;
 5. rejects missing, non-human, or cross-principal source events;
@@ -42,29 +42,33 @@ The script resolves the agent principal, reads the latest Autobio observation,
 stages it in the `self` namespace, applies the self gate, and records the run.
 It never writes SOUL.
 
-## Principal ambiguity
+## Owner/subject ambiguity
 
 Both jobs fail closed.
 
-- User Dreaming proceeds without `--principal` only when Chronicle contains
-  exactly one principal of type `user`.
-- Self Dreaming proceeds without `--principal` only when an active/unique
-  agent principal can be resolved.
+- `--principal` selects the Chronicle **agent owner principal**.
+- `--user-subject` selects the human relationship subject.
+- User Dreaming auto-resolves one explicit human author from recent owned
+  Chronicle evidence; if author metadata is absent it uses the scoped
+  `primary_user` fallback.
+- Multiple explicit human authors require `--user-subject`.
+- Self Dreaming uses the active/unique agent principal as both owner and subject.
 
-Do not guess a principal from profile names, filenames, or prose.
+Do not invent a Chronicle user principal: Chronicle's current storage ownership
+model keeps user-domain memory under the agent owner.
 
 ## State paths
 
 ```
 <hermes-home>/commons/data/dreaming/
   profiles/<profile_id>/
-    principals/<subject_principal_id>/
-      relationship.json
-      self.json
+    principals/<owner_principal_id>/
+      subjects/<subject_id>/
+        relationship.json
+        self.json
 ```
 
-The store records profile/principal metadata and rejects mismatched reads or
-writes.
+The store records profile, owner-principal, subject, and domain metadata and rejects mismatched reads or writes.
 
 ## Legacy curator
 
