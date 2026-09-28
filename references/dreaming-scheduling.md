@@ -11,11 +11,11 @@ they share one repository and kernel.
 | `lucid:self-dream` | daily 00:05 local | latest Autobio observation -> self staging |
 | `lucid:curate` | optional during legacy migration | old journal curator |
 
-Self Dreaming must run after Autobio's daily observation and before the daily
-SOUL micro-distillation if the distillation is expected to consume same-day
-self insight. Deployment schedules therefore need to leave enough wall-clock
-space for the observation job to finish; do not overlap these jobs merely to
-keep historical clock times.
+Self Dreaming runs at 00:05 local, after the late-evening Autobio observation
+window. It is idempotent by source path: if no newer observation exists, the run
+records a no-op rather than re-promoting the same observation. Autobio/SOUL
+remains responsible for when promoted self evidence is consumed by its own
+distillation cycle.
 
 User Dreaming is independent of the legacy curator and should run after the
 previous day's normal Chronicle capture has settled.
@@ -41,3 +41,29 @@ python3 scripts/lucid_curate.py
 Only keep the curator cron while another consumer still depends on its curated
 journal artifacts. Do not use curator output as fresh evidence for User
 Dreaming.
+
+
+## Registration and migration
+
+Run:
+
+~~~bash
+python3 scripts/lucid_init.py --json
+~~~
+
+The command is idempotent. It uses Hermes cron management rather than editing
+jobs.json directly.
+
+It guarantees one canonical job for each required Dreaming domain. If the
+historical job name lucid:dream exists, it is edited in place to lucid:curate
+when legacy curation is retained, preserving the existing job id/history.
+Duplicate canonical jobs are removed.
+
+To retire the old curator completely:
+
+~~~bash
+python3 scripts/lucid_init.py --no-legacy-curator --json
+~~~
+
+Use scripts/lucid_status.py to inspect the currently registered Lucid jobs and
+the latest principal/domain run records.
