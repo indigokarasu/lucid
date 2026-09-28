@@ -1,25 +1,21 @@
 ---
 name: ocas-lucid
 license: MIT
-description: 'Nightly journal curator. Batch-processes OCAS skill journals via relevance
-  classification and writes curated content to journal files for the configured memory
-  provider to ingest. Classifies each journal for filing as a verbatim journal note,
-  structured entity/relationship data, or skip. Features re-emergence detection,
-  two-pass stale handling, change magnitude gates, hibernation protection,
-  and incremental cursor-based resumption. NOT for real-time memory filing,
-  skill evaluation, behavioral pattern detection, or entity identity resolution.'
+description: 'Canonical OCAS Dreaming implementation. Runs principal-scoped User Dreaming from Chronicle evidence and agent self-Dreaming from Autobio observations using one shared, domain-isolated kernel. User Dreaming writes accepted derivations through Chronicle; self-Dreaming stages evidence for Autobio/SOUL. The legacy journal curator remains available as lucid.curate only.'
 source: https://github.com/<agent-handle>/lucid
 includes:
 - references/**
 - scripts/**
 triggers:
-- lucid.dream
+- lucid.user-dream
+- lucid.self-dream
+- lucid.curate
 - lucid.status
 - lucid.init
 - lucid.update
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: "3.3.0"
+  version: "4.1.0"
   hermes:
     tags:
     - journaling
@@ -27,20 +23,26 @@ metadata:
     - memory
     - nightly-cron
     - ocas
-    category: infrastructure
+    category: memory
 ---
 
 # Lucid
 
-> **Dreaming transition:** the reusable OCAS Dreaming kernel now lives in `dreaming/`. The existing journal-curation cycle below remains a legacy compatibility surface. User/relationship Dreaming is downstream of Chronicle evidence and remains user-principal owned; Indigo self-evolution remains owned by Autobio/SOUL. See `references/dreaming-kernel.md`.
+Lucid is the canonical OCAS Dreaming implementation.
 
+One repository owns the shared Dreaming machinery and two isolated domains:
 
-Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
-by relevance, and writes curated content to Lucid's journal files. The configured memory
-provider reads these journals during its ingestion cycle and decides what to persist.
+- **User Dreaming**: Chronicle evidence → verified user-owned derivations →
+  Chronicle durable memory.
+- **Self Dreaming**: Autobio observation → self-domain staging/gating → evidence
+  available to Autobio/SOUL.
 
-Lucid does NOT depend on any specific memory provider. It writes to
-`{agent_root}/commons/journals/ocas-lucid/` and lets the memory provider handle ingestion.
+Lucid owns neither canonical user memory nor canonical agent identity.
+Chronicle remains the durable user-memory authority. Autobio/SOUL remains the
+agent-identity authority.
+
+The historical journal curator is retained as `lucid.curate` only. It is a
+legacy compatibility path, not the primary Dreaming pipeline.
 
 ## Interactive Menu
 
@@ -48,9 +50,11 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 ## When to Use
 
-- Scheduled nightly cron at 3am (primary mode)
-- Manual invocation via `lucid.dream` for immediate processing
-- `lucid.status` to check last run, pending journals, filing stats
+- Nightly User Dreaming from Chronicle evidence.
+- Daily self-Dreaming after Autobio observation.
+- Manual `lucid.user-dream` / `lucid.self-dream` runs.
+- Legacy `lucid.curate` only while curated-journal consumers remain.
+- `lucid.status` to inspect per-principal run state.
 
 ## When NOT to Use
 
@@ -60,11 +64,32 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 - Direct Chronicle storage/identity mutation outside sanctioned Chronicle contracts
 - Inspecting a single known journal (just read the file)
 
-## Dream cycle checklist
+## User Dreaming checklist
 
-Run in order; do not skip a phase — each journal is processed to completion
+- [ ] Resolve exactly one target user principal (or require an explicit id).
+- [ ] Read Chronicle descriptive interaction patterns since the last watermark.
+- [ ] Re-open authoritative Chronicle evidence; reject cross-principal evidence.
+- [ ] Stage a relationship-domain candidate.
+- [ ] Apply the User Dreaming gate.
+- [ ] Commit accepted derivations through Chronicle's atomic append/reducer path.
+- [ ] Read the Chronicle event back and verify it.
+- [ ] Promote Lucid relationship state only after durable verification.
+- [ ] Record the run id, watermark, accepted/held/blocked counts, and write ids.
+
+## Self Dreaming checklist
+
+- [ ] Resolve the target agent principal.
+- [ ] Read the latest Autobio observation.
+- [ ] Stage only in the `self` namespace.
+- [ ] Gate the observation as eligible/held/blocked.
+- [ ] Record promoted self insight as Autobio-eligible evidence only.
+- [ ] Never write SOUL or user memory.
+
+## Legacy curator checklist
+
+Run in order only for `lucid.curate` — each journal is processed to completion
 (file + cursor advance) before the next, so a mid-run kill loses at most the
-dream journal summary.
+curator journal summary.
 
 - [ ] **Orient** — load `config.json`; build the processed set from
       `ingestion_log.jsonl`; check for a >24h gap and run catch-up if needed
@@ -86,9 +111,10 @@ dream journal summary.
 - [ ] Create empty `ingestion_log.jsonl`, `decisions.jsonl`,
       `recirculation_queue.jsonl`, `removed_entries.jsonl`
 - [ ] Create `{agent_root}/commons/journals/ocas-lucid/`
-- [ ] Register cron jobs `lucid:dream` and `lucid:update` — **check before
-      registering** (why: re-registering duplicates the job and double-runs the
-      cycle, corrupting the cursor)
+- [ ] Register `lucid:user-dream` and `lucid:self-dream` — **check before
+      registering** to avoid duplicate consolidation runs.
+- [ ] Register `lucid:curate` only if the deployment still has a consumer of
+      legacy curated-journal artifacts.
 - [ ] Log initialization as a DecisionRecord
 
 ## Error handling
@@ -107,27 +133,33 @@ in `references/error-handling.md`.
 
 ## Responsibility boundary
 
-The Lucid curator owns nightly journal scanning, provider-independent curated journal output,
-relevance classification, recirculation, and re-emergence. The new `dreaming/`
-package is shared infrastructure, not an owner of user facts or Indigo identity.
-Lucid does **not** own Chronicle evidence, social graph updates (Weave),
-user-pattern mining (Chronicle), skill evaluation (Mentor), user/relationship interpretation outside the User Dreaming contract, or Indigo identity
-evolution (Autobio/SOUL).
+Lucid owns Dreaming orchestration, principal/domain isolation, candidate state,
+gating, run/watermark state, and the User/Self Dreaming execution paths.
+
+Lucid does **not** own Chronicle evidence or canonical durable user memory;
+Chronicle does. Lucid does **not** own Indigo identity; Autobio/SOUL does.
+Lucid does **not** own system-improvement behavior; Finch/Praxis/Mentor/Forge
+do. The legacy curator owns only its compatibility journal artifacts.
 
 Read `references/boundaries-and-interfaces.md` when deciding which component should handle a task or when wiring a new consumer of Lucid output.
 
 ## Commands
 
-- `lucid.dream` -- run the full dream cycle immediately, ignoring the time gate
-- `lucid.status` -- last run timestamp, journals pending, cumulative filing stats
-- `lucid.init` -- create storage directories, initialize config and logs, register cron jobs
-- `lucid.update` -- pull latest from GitHub source; preserves journals and data
+- `lucid.user-dream` — User Dreaming now.
+- `lucid.self-dream` — self-Dreaming now.
+- `lucid.curate` — legacy journal curation compatibility cycle.
+- `lucid.status` — Dreaming + legacy curator status.
+- `lucid.init` — initialize state and register subject-specific jobs.
+- `lucid.update` — update Lucid while preserving state.
 
 ### Bundled scripts
 
 | Script | Usage | Exit codes |
 |--------|-------|-----------|
-| `scripts/lucid_dream_template.py` | `--help`, `--dry-run`, `--batch-size N`, `--json` | 0 completed/help, 2 bad usage or missing `config.json` |
+| `scripts/lucid_user_dream.py` | `--principal`, `--since-seq`, `--limit`, `--json` | 0 clean run, 1 durable-write error |
+| `scripts/lucid_self_dream.py` | `--principal`, `--observation`, `--observations-dir`, `--json` | 0 completed |
+| `scripts/lucid_curate.py` | compatibility wrapper for the old journal cycle | follows legacy curator |
+| `scripts/lucid_dream_template.py` | legacy implementation behind `lucid.curate` | 0 completed/help, 2 bad usage or missing config |
 | `scripts/update.sh` | `--help`, `--dry-run`, `--force` | 0 updated, 2 bad usage, 3 dirty worktree (refused), 4 divergence/pull failure |
 
 Both scripts are safe to invoke with `--help`: they print usage and exit 0
@@ -237,14 +269,17 @@ writes only its own curated journals, candidate payloads, and private data files
 
 ## Background tasks
 
-`lucid:dream` at `0 3 * * *` (3am local), `lucid:update` at `0 0 * * *`
-(midnight daily). If the system was asleep at the 3am run, the morning gap
-detector re-processes it: check the run-journal directory for the expected
-`YYYY-MM-DD`, run `lucid.dream` once if absent, and log
-`schedule_gap=missed→recovered`.
+Required:
 
-See `references/cron-execution.md` for cron-specific execution patterns and
-`references/recovery-and-scheduling.md` for the job table.
+- `lucid:user-dream` — daily 02:20 local.
+- `lucid:self-dream` — daily after Autobio observation and before the
+  micro-distillation window.
+
+Optional during migration:
+
+- `lucid:curate` — legacy curator only while a downstream consumer remains.
+
+See `references/dreaming-scheduling.md` for the canonical schedules.
 
 ## Ontology mapping
 
