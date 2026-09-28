@@ -32,7 +32,7 @@ metadata:
 
 # Lucid
 
-> **Dreaming transition:** the reusable OCAS Dreaming kernel now lives in `dreaming/`. The existing journal-curation cycle below remains a legacy compatibility surface. Relationship learning is downstream of Chronicle evidence; Indigo self-evolution remains owned by Autobio/SOUL. See `references/dreaming-kernel.md`.
+> **Dreaming transition:** the reusable OCAS Dreaming kernel now lives in `dreaming/`. The existing journal-curation cycle below remains a legacy compatibility surface. User/relationship Dreaming is downstream of Chronicle evidence and remains user-principal owned; Indigo self-evolution remains owned by Autobio/SOUL. See `references/dreaming-kernel.md`.
 
 
 Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
@@ -111,8 +111,7 @@ The legacy Lucid curator owns nightly journal scanning, legacy MemPalace filing,
 relevance classification, recirculation, and re-emergence. The new `dreaming/`
 package is shared infrastructure, not an owner of user facts or Indigo identity.
 Lucid does **not** own Chronicle evidence, social graph updates (Weave),
-user-pattern mining (Chronicle), skill evaluation (Mentor), relationship
-interpretation outside the Dreaming relationship domain, or Indigo identity
+user-pattern mining (Chronicle), skill evaluation (Mentor), user/relationship interpretation outside the User Dreaming contract, or Indigo identity
 evolution (Autobio/SOUL).
 
 Read `references/boundaries-and-interfaces.md` when deciding which skill should
