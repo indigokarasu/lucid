@@ -68,20 +68,14 @@ Almost-exclusively scan content (skip unless the cap allows):
 `ocas-finch` (`scan-*`, `daily-*`, `weekly-*`), `ocas-spot` (`sweep-*`,
 `spot-watch-*`), `ocas-custodian` (`deep-scan-*`).
 
-## Degraded mode decision tree
+## Curation and downstream-ingestion decision tree
 
-1. Check MemPalace availability via `mempalace_status`
-2. **If unavailable**: log `degraded: mempalace` in evidence, skip
-   `mempalace_add_drawer`/`mempalace_kg_add`, write all other records
-   (decisions, ingestion log, dream journal) normally
-3. **If available but an individual call errors**: log the specific error, queue
-   for retry next run, continue with remaining journals
-4. Never block the dream cycle on MemPalace — it is a write-side dependency,
-   not a read-side one
-
-If the MemPalace MCP tools are unavailable entirely, the template falls back to
-direct SQLite access against the MemPalace store; see
-`references/cron-execution.md` for that path and its failure modes.
+1. Classify the source journal and preserve its source path/provenance.
+2. Write the curated Lucid journal artifact for every `file` classification.
+3. If the source explicitly carries a principal, attach a principal-scoped memory candidate.
+4. If no principal is explicit, attach no candidate; keep the artifact as evidence only.
+5. Chronicle availability is not a Lucid precondition. Durable ingestion is a separate downstream concern.
+6. If the curated artifact cannot be written, record the failure and leave the source eligible for repair/retry.
 
 ## Cron-specific environment constraints
 
