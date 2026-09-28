@@ -15,8 +15,7 @@ Implements the recovery contract from `spec-ocas-recovery.md`.
 - **Gap detection** — on every wake, check the evidence log. If the gap exceeds
   24h for a dream cycle, log `gap_detected` and run a catch-up pass (capped at
   40 journals).
-- **Degraded mode** — when MemPalace MCP is unavailable, log
-  `degraded: mempalace` and queue filing for retry. When journal sources are
+- **Downstream-memory degradation** — Chronicle ingestion unavailability does not block Lucid classification or curated journal writes. Retry ingestion downstream. When journal sources are
   missing, continue with the available sources.
 - **Log compaction** — ingestion logs older than 30 days (no-op) or 90 days
   (error/gap) are compacted. Last 7 days are retained.
