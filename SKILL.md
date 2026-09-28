@@ -107,10 +107,13 @@ in `references/error-handling.md`.
 
 ## Responsibility boundary
 
-Lucid owns nightly journal scanning, MemPalace filing, relevance
-classification, recirculation, and re-emergence. It does **not** own Chronicle
-writes (Elephas), social graph updates (Weave), real-time pattern analysis
-(Corvus), skill evaluation (Mentor), or entity identity resolution (Elephas).
+The legacy Lucid curator owns nightly journal scanning, legacy MemPalace filing,
+relevance classification, recirculation, and re-emergence. The new `dreaming/`
+package is shared infrastructure, not an owner of user facts or Indigo identity.
+Lucid does **not** own Chronicle evidence, social graph updates (Weave),
+user-pattern mining (Chronicle), skill evaluation (Mentor), relationship
+interpretation outside the Dreaming relationship domain, or Indigo identity
+evolution (Autobio/SOUL).
 
 Read `references/boundaries-and-interfaces.md` when deciding which skill should
 handle a task, when Elephas is run manually (update the `config.json` cursor to
