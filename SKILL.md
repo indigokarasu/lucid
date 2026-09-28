@@ -32,6 +32,9 @@ metadata:
 
 # Lucid
 
+> **Dreaming transition:** the reusable OCAS Dreaming kernel now lives in `dreaming/`. The existing journal-curation cycle below remains a legacy compatibility surface. Relationship learning is downstream of Chronicle evidence; Indigo self-evolution remains owned by Autobio/SOUL. See `references/dreaming-kernel.md`.
+
+
 Nightly journal curator. Batch-processes journals from all OCAS skills, classifies them
 by relevance, and writes curated content to Lucid's journal files. The configured memory
 provider reads these journals during its ingestion cycle and decides what to persist.
