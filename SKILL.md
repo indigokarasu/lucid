@@ -107,7 +107,7 @@ in `references/error-handling.md`.
 
 ## Responsibility boundary
 
-The legacy Lucid curator owns nightly journal scanning, legacy MemPalace filing,
+The Lucid curator owns nightly journal scanning, provider-independent curated journal output,
 relevance classification, recirculation, and re-emergence. The new `dreaming/`
 package is shared infrastructure, not an owner of user facts or Indigo identity.
 Lucid does **not** own Chronicle evidence, social graph updates (Weave),
