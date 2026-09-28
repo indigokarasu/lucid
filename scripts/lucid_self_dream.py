@@ -66,7 +66,8 @@ def main(argv=None) -> int:
         print(
             "Lucid self-Dreaming: "
             f"source={payload['source_path']} promoted={payload['promoted']} "
-            f"held={payload['held']} blocked={payload['blocked']}"
+            f"held={payload['held']} blocked={payload['blocked']} "
+            f"skipped={payload['skipped']}"
         )
     return 0
 
