@@ -14,6 +14,8 @@ Read the smallest reference that matches the operation.
 | `references/interactive-menu.md` | Interactive Lucid invocation. |
 | `scripts/lucid_user_dream.py` | Canonical User Dreaming executable. |
 | `scripts/lucid_self_dream.py` | Canonical self-Dreaming executable. |
+| `scripts/lucid_init.py` | Initialize Lucid state and idempotently register/migrate Lucid cron jobs. |
+| `scripts/lucid_status.py` | Inspect Lucid cron and principal/domain run state. |
 | `scripts/lucid_curate.py` | Compatibility entry point for the legacy journal curator. |
 | `scripts/update.sh` | Updating Lucid while preserving state. |
 
