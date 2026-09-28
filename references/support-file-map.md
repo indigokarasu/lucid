@@ -16,11 +16,9 @@ applies.
 | `references/okr.md` | During OKR evaluation. Targets for ingestion coverage, duplicate avoidance, recirculation, Signal precision, schedule adherence, data integrity. |
 | `references/gotchas.md` | Before any dream cycle run. Journal discovery, KG triples, null fields, ingestion log formats, cursor resumption, recirculation queue. |
 | `references/scoring-traps.md` | When a run files the wrong thing, files something twice, or files nothing across several consecutive runs. |
-| `references/boundaries-and-interfaces.md` | When deciding which skill should handle a task, when Elephas is run manually, or when wiring a new consumer of Lucid's output. Full read/write/query surface. |
+| `references/boundaries-and-interfaces.md` | When deciding which component should handle a task or when wiring a new consumer of Lucid output. Full read/write/query surface. |
 | `references/recovery-and-scheduling.md` | When a run was missed, when the evidence log looks wrong, or during OKR evaluation. Recovery contract, cron job table, schedule-gap recovery. |
-| `references/elephas-pipeline-gotchas.md` | Before running the elephas cron pipeline directly (when the `ocas-elephas` skill is not found). List-entity crash bug fix, bridge dependency, cursor update, expected residuals, script path. |
-| `references/elephas-pipeline-json-errors.md` | When elephas reports high JSON parse error rates. Error pattern, root cause (mentor malformed JSON), impact, recommended non-mitigation. |
-| `references/bridge-health-check.md` | Before running any pipeline that depends on LadybugDB (elephas, deep scan). Health check, restart procedure, env var reference. |
+| `references/bridge-health-check.md` | When diagnosing remaining LadybugDB-based domain stores such as Weave. Not a Chronicle or Lucid dependency. |
 | `references/platform-notes.md` | When a tool is unexpectedly missing in a cron run (`execute_code`, `memory`), or when sizing `max_turns` for a large backlog. |
 | `references/interactive-menu.md` | When Lucid is invoked interactively and a two-level menu must be presented. |
 | `scripts/lucid_dream_template.py` | Before running a dream cycle by hand, and whenever you need to preview a batch instead of committing it. Copy to `/tmp/`; `--dry-run` previews, `--batch-size N` overrides the 200 cap, `--json` emits a machine-readable summary. |
