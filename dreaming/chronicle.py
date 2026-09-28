@@ -99,7 +99,21 @@ class ChroniclePatternSource:
     def patterns(self, **kwargs):
         if not hasattr(self.core, "interaction_patterns"):
             raise RuntimeError("Chronicle interaction pattern miner is unavailable")
-        return self.core.interaction_patterns.mine(**kwargs)
+        patterns = self.core.interaction_patterns.mine(**kwargs)
+        if not self.principal_id:
+            return patterns
+        scoped = []
+        for pattern in patterns:
+            ids = [str(x) for x in pattern.get("event_ids", []) if x]
+            if not ids:
+                continue
+            events = [self.core.store.get_event(event_id) for event_id in ids]
+            if any(event is None for event in events):
+                continue
+            if any(event.get("owner") != self.principal_id for event in events):
+                continue
+            scoped.append(pattern)
+        return scoped
 
     @staticmethod
     def evidence_for(pattern: dict[str, Any]) -> list[EvidenceRef]:
@@ -152,6 +166,8 @@ class ChronicleDreamWriter:
                 raise ValueError(f"missing Chronicle evidence event: {event_id}")
             if event.get("actor") != "user":
                 raise ValueError(f"evidence is not human-user attributed: {event_id}")
+            if event.get("owner") != self.principal_id:
+                raise ValueError(f"evidence belongs to another principal: {event_id}")
 
         payload = {
             "kind": "note",
