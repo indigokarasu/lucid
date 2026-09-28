@@ -7,10 +7,10 @@ file has the full set, including the per-run and self-update paths.
 |---------|---------|----------|
 | `config.json` missing | Script exits `2` before processing | Run `lucid.init`, then re-run. Do not hand-write a config — the cursor format is load-bearing for resumption. |
 | `config.json` unparseable | Script exits `2` with a JSON error | Restore from git or rewrite via `lucid.init`. Never "fix" it by hand-editing the cursor; a wrong cursor re-files or skips journals silently. |
-| Source journal is malformed JSON | `read_error` recorded, score `-3`, run continues | Producer-side bug (commonly `ocas-mentor` trailing commas, unescaped newlines in `notes`). File an issue against the producer; do **not** patch the journal in place — the cursor may re-read it and the fix will be overwritten. See `references/elephas-pipeline-json-errors.md`. |
-| MemPalace MCP unavailable | `degraded: mempalace` in evidence, `filed_count: 0` | **Expected, not fatal.** Decisions, ingestion log, and dream journal are still written so classification is not lost. Filing is retried on the next run. |
-| MemPalace errors mid-batch | Per-call error logged, remaining journals continue | Queue for retry; never abort the batch — a partial run still advances the cursor usefully. |
-| MemPalace returns only `root` wing | Filings land in `root/<room>` | Expected fallback. Do not try to create custom wings via MCP; it is unsupported. See `references/scoring-traps.md`. |
+| Source journal is malformed JSON | `read_error` recorded, score `-3`, run continues | Producer-side bug (commonly `ocas-mentor` trailing commas, unescaped newlines in `notes`). File an issue against the producer; do **not** patch the journal in place — the cursor may re-read it and the fix will be overwritten. Preserve the malformed source journal unchanged and file the producer issue. |
+| Chronicle ingestion unavailable | Curated artifacts still write normally | Downstream ingestion retries independently; Lucid does not mutate Chronicle directly. |
+| Curated artifact write fails | `curated_write_failed` recorded | Do not claim the source was filed; retry during repair/catch-up. |
+| Source has no explicit principal | Candidate is omitted | Keep the curated evidence; never infer user ownership. |
 | Reference file missing from disk | A section cannot be read | Fall back to the procedural instructions in the SKILL.md body. Do not block the run. |
 | Backlog > 1000 journals, batch files nothing interesting | `file_count: 0` across several runs | Cursor is buried in scan-heavy territory. Run a targeted pass over high-signal skills only (vesper, praxis, taste, custodian, dispatch). See "buried backlog" in `references/scoring-traps.md`. |
 | `re_evaluations` skips cleanup silently | Recirculation entries never promoted | Use `e.get('re_evaluations') or 0`; a bare `>= 3` against `None` raises `TypeError` in Python 3, not a quiet `False`. |
