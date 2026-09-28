@@ -10,8 +10,8 @@ Usage: python3 /tmp/lucid_dream.py
 Key design decisions encoded here:
 1. Scan classification uses SKILL-LEVEL EXCEPTIONS (not just filename patterns)
 2. Priority sorting ensures high-signal journals are processed before the 40-cap
-3. MemPalace MCP calls are wrapped in try/except degraded mode
-4. All records are written even in degraded mode (classification still valuable)
+3. Curated journal writes are provider-independent and preserve principal/provenance
+4. Classification records are written even when no memory candidate is eligible
 5. entities_observed type guard (can be int instead of list)
 6. File discovery handles both date subdirs and skill-root-level files
 7. Multi-batch support (process 200+ journals per run to clear scan backlogs)
@@ -88,7 +88,7 @@ def is_scan(fp):
 SKILL_PRIORITY = {
     'ocas-mentor': 0, 'ocas-vesper': 1, 'ocas-praxis': 2, 'ocas-taste': 3,
     'ocas-dispatch': 4, 'ocas-spot': 5, 'ocas-forge': 6, 'ocas-custodian': 7,
-    'ocas-elephas': 8, 'ocas-finch': 9, 'ocas-bones': 10, 'ocas-sands': 11,
+    'ocas-finch': 8, 'ocas-bones': 9, 'ocas-sands': 10,
     'dispatch': 50,
 }
 
@@ -248,8 +248,8 @@ def classify(score):
     if score >= 3: return "recirculate"
     return "skip"
 
-# === WING ASSIGNMENT ===
-def get_wing_room(skill):
+# === CURATION CATEGORY ===
+def get_category_topic(skill):
     mapping = {
         'ocas-custodian': ('system', 'operations'),
         'ocas-mentor': ('evolution', 'evolution'),
@@ -260,7 +260,6 @@ def get_wing_room(skill):
         'ocas-spot': ('operations', 'operations'),
         'ocas-vesper': ('operations', 'operations'),
         'ocas-taste': ('preferences', 'preferences'),
-        'ocas-elephas': ('knowledge', 'knowledge'),
         'ocas-bones': ('operations', 'operations'),
         'ocas-sands': ('preferences', 'preferences'),
     }
@@ -291,34 +290,41 @@ def gather_unprocessed(processed):
                     all_files.append(f)
     return all_files
 
-# === MEMPALACE FILING (SQLite fallback) ===
-def file_to_kg(entities, rel_path, skill, room, narrative_summary):
-    """File entities to MemPalace KG via SQLite direct access."""
-    try:
-        import sqlite3
-        conn = sqlite3.connect("<mempalace>/palace/knowledge_graph.sqlite3")
-        c = conn.cursor()
-        filed = []
-        for ent in entities:
-            eid = ent["name"].lower().replace(" ", "_")[:40]
-            c.execute("INSERT OR IGNORE INTO entities (id, name, type, properties) VALUES (?, ?, ?, ?)",
-                      (eid, ent["name"], ent["type"], json.dumps({"source": rel_path, "skill": skill})))
-            tid = str(uuid.uuid4())
-            c.execute("INSERT OR IGNORE INTO triples (id, subject, predicate, object, source_closet, source_file) VALUES (?, ?, ?, ?, ?, ?)",
-                      (tid, ent["name"], "is_a", ent["type"], room, rel_path))
-            filed.append(ent["name"])
-        # Add journal entity
-        jid = rel_path.replace("/", "_").replace(".", "_")[:50]
-        c.execute("INSERT OR IGNORE INTO entities (id, name, type, properties) VALUES (?, ?, ?, ?)",
-                  (jid, f"journal:{rel_path}", "Document",
-                   json.dumps({"skill": skill, "summary": narrative_summary[:200]})))
-        c.execute("INSERT OR IGNORE INTO triples (id, subject, predicate, object, source_closet, source_file) VALUES (?, ?, ?, ?, ?, ?)",
-                  (str(uuid.uuid4()), f"journal:{rel_path}", "produced_by", skill, room, rel_path))
-        conn.commit()
-        conn.close()
-        return filed
-    except Exception as e:
-        return [f"ERROR: {e}"]
+# === PRINCIPAL / CANDIDATE HELPERS ===
+def source_principal(journal):
+    """Return the explicit principal carried by the source journal, if any."""
+    if not isinstance(journal, dict):
+        return None
+    return (
+        journal.get("target_principal")
+        or journal.get("principal_id")
+        or journal.get("owner_principal")
+    )
+
+def build_memory_candidate(journal, rel_path, skill, score, signals, narrative, entities):
+    """Build a candidate only when the source journal explicitly names a principal."""
+    principal = source_principal(journal)
+    if not principal:
+        return None
+    return {
+        "candidate_id": f"lucid-{uuid.uuid4().hex[:16]}",
+        "target_principal": principal,
+        "domain": "journal_curation",
+        "claim_kind": "note",
+        "claim_state": "inferred",
+        "derivation_type": "normalized",
+        "confidence": min(0.95, max(0.5, score / 10.0)),
+        "claim": {
+            "source_skill": skill,
+            "summary": narrative[:600],
+            "entities": entities,
+            "signals": signals,
+        },
+        "provenance": {
+            "source_component": skill,
+            "source_journal": rel_path,
+        },
+    }
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
@@ -456,7 +462,7 @@ def main(argv=None):
             "timestamp": timestamp, "run_id": run_id, "filepath": str(fp),
             "relative_path": rel, "score": score, "classification": cls,
             "reasoning": "; ".join(signals) if signals else "no signals",
-            "signals": signals, "mempalace_filed": False, "mempalace_error": None,
+            "signals": signals, "curated_written": False, "candidate_eligible": False,
             "skill": skill, "entity_count": len(entities),
             "narrative_len": narrative_len
         }
@@ -465,45 +471,50 @@ def main(argv=None):
 
         if cls == "file":
             filed += 1
-            wing, room = get_wing_room(skill)
-            d["wing"] = wing
-            d["room"] = room
-            d["mempalace_error"] = "pending_mcp"
+            category, topic = get_category_topic(skill)
+            d["category"] = category
+            d["topic"] = topic
             file_details.append({
                 "path": rel, "score": score, "signals": signals,
-                "skill": skill, "wing": wing, "room": room,
+                "skill": skill, "category": category, "topic": topic,
                 "entities": entities, "narrative_len": narrative_len
             })
-            # The narrative itself is NOT stored in the decision record — only
-            # its length. If filing to MemPalace is unavailable, a `file`
-            # decision would point at nothing retrievable. Write the payload to
-            # a curated journal file now, so a classification always has a
-            # durable artifact behind it.
-            narrated = journal if isinstance(journal, dict) else {}
+            # The decision ledger stores metadata only; the curated journal preserves
+            # the reviewable content and optional principal-scoped candidate.
             _nar = extract_narrative(journal, str(fp)) if journal is not None else ""
+            candidate = build_memory_candidate(
+                journal, rel, skill, score, signals, _nar, entities
+            )
             try:
                 _safe = rel.replace("/", "_").replace(".json", "")
                 _cpath = LUCID_JOURNALS_DIR / today / f"curated-{run_id}-{_safe}.json"
                 os.makedirs(_cpath.parent, exist_ok=True)
                 with open(_cpath, "w") as _cf:
                     json.dump({
-                        "journal_spec_version": "1.3", "run_id": run_id,
-                        "timestamp": timestamp, "type": "Action",
-                        "source_journal": rel, "skill": skill,
-                        "wing": wing, "room": room, "relevance_score": score,
-                        "signals": signals, "summary": _nar[:600],
+                        "journal_spec_version": "2.0",
+                        "run_id": run_id,
+                        "timestamp": timestamp,
+                        "type": "Observation",
+                        "source_journal": rel,
+                        "source_component": skill,
+                        "target_principal": source_principal(journal),
+                        "category": category,
+                        "topic": topic,
+                        "relevance_score": score,
+                        "signals": signals,
+                        "summary": _nar[:600],
                         "narrative": _nar or "(no narrative field; classified on structured signals only)",
-                        "entities": entities, "entity_count": len(entities),
-                        "filed_via": "curated_journal_file",
-                        "mempalace_available": False,
-                        "note": "MemPalace unavailable; this file is the filing payload for Chronicle ingestion.",
+                        "entities": entities,
+                        "entity_count": len(entities),
+                        "memory_candidate": candidate,
+                        "note": "Provider-independent curated evidence. Durable memory is decided by sanctioned Chronicle ingestion.",
                     }, _cf, indent=2)
                 curated_entries.append(_cpath.name)
-                d["mempalace_filed"] = True
-                d["mempalace_error"] = None
+                d["curated_written"] = True
+                d["candidate_eligible"] = candidate is not None
                 d["filed_via"] = "curated_journal_file"
             except Exception as _e:
-                d["mempalace_error"] = f"curated_write_failed: {_e}"[:200]
+                d["curated_error"] = f"curated_write_failed: {_e}"[:200]
         elif cls == "recirculate":
             recirculated += 1
             recircs.append({
@@ -530,26 +541,8 @@ def main(argv=None):
             for r in recircs:
                 f.write(json.dumps(r) + "\n")
 
-    # File to MemPalace KG (SQLite fallback when MCP unavailable).
-    # Never touch the external store on a dry run.
-    # Only downgrade: a curated entry written above is a real durable filing,
-    # so never reset its state back to "not filed" on the MemPalace path.
-    mempalace_filed_count = 0
-    for fd in (() if dry_run else file_details):
-        wing, room = fd["wing"], fd["room"]
-        summary = fd["signals"]
-        filed_entities = file_to_kg(fd["entities"], fd["path"], fd["skill"], room, str(summary))
-        if filed_entities and not any(str(e).startswith("ERROR") for e in filed_entities):
-            mempalace_filed_count += 1
-            # Update the decision record
-            for d in decisions:
-                if d["filepath"] == str(Path(JOURNALS_DIR) / fd["path"]):
-                    d["mempalace_filed"] = True
-                    d["mempalace_error"] = None
-                    d["filed_via"] = "mempalace_kg"
-
-    # A `file` decision is only real if something retrievable was written.
-    filed_count = max(mempalace_filed_count, len(curated_entries))
+    # A file decision is durable only when its curated journal artifact exists.
+    filed_count = len(curated_entries)
 
     # Evidence
     evidence = {
@@ -559,7 +552,7 @@ def main(argv=None):
         "recirculate_count": recirculated, "skip_count": skipped,
         "filed_count": filed_count,
         "curated_entries_written": len(curated_entries),
-        "degraded": "mempalace" if curated_entries and not mempalace_filed_count else None,
+        "degraded": None,
         "empty_journals_screened_from_selection": empty_screened,
         "not_activity_reason": None
     }
@@ -579,15 +572,12 @@ def main(argv=None):
             f"Filed {filed} (curated entries written: {len(curated_entries)}), "
             f"recirculated {recirculated}, skipped {skipped}. "
             f"Empty journals screened from selection: {empty_screened}."
-            + (" MemPalace unavailable; filing deferred to curated journal files."
-               if curated_entries and not mempalace_filed_count else "")
         ),
         "scan_count": len(results), "file_count": filed,
         "recirculate_count": recirculated, "skip_count": skipped,
         "filed_count": filed_count,
         "curated_entries_written": curated_entries,
-        "mempalace_available": mempalace_filed_count > 0,
-        "total_journals": total_available, "file_details": file_details,
+                "total_journals": total_available, "file_details": file_details,
         "recirculate_details": [], "skip_details": [],
         "re_emergence_events": [], "signal_emissions": [],
         "not_activity_reason": "dry_run" if dry_run else None
@@ -619,7 +609,7 @@ def main(argv=None):
     summary = {
         "run_id": run_id, "processed": len(results), "available": total_available,
         "filed": filed, "recirculated": recirculated, "skipped": skipped,
-        "mempalace_filed": mempalace_filed_count, "cursor": config.get("cursor_file"),
+        "curated_written": len(curated_entries), "cursor": config.get("cursor_file"),
         "streak": config.get("streak"), "dry_run": dry_run,
     }
     if args.json:
@@ -632,7 +622,7 @@ def main(argv=None):
         if file_details:
             print("\nFiled journals:")
             for fd in file_details:
-                print(f"  [{fd['score']}] {fd['path']} -> {fd['wing']}/{fd['room']}")
+                print(f"  [{fd['score']}] {fd['path']} -> {fd['category']}/{fd['topic']}")
     return 0
 
 if __name__ == "__main__":
