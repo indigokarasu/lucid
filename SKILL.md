@@ -19,7 +19,7 @@ triggers:
 - lucid.update
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: "3.2.0"
+  version: "3.3.0"
   hermes:
     tags:
     - journaling
