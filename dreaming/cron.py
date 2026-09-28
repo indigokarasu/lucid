@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,14 +25,21 @@ class CronSpec:
     deliver: str = "local"
 
 
+_SKILL_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _script_command(name: str) -> str:
+    return "python3 " + shlex.quote(str(_SKILL_ROOT / "scripts" / name)) + " --json"
+
+
 USER_DREAM = CronSpec(
     name="lucid:user-dream",
     schedule="20 2 * * *",
     prompt=(
-        "Run Lucid User Dreaming. Load the ocas-lucid skill, then execute "
-        "python3 ~/.hermes/profiles/$HERMES_PROFILE/skills/ocas-lucid/"
-        "scripts/lucid_user_dream.py --json. Treat a non-zero exit as a failed "
-        "cron run and report the error; otherwise remain silent."
+        "Run Lucid User Dreaming. Load the ocas-lucid skill, then execute: "
+        + _script_command("lucid_user_dream.py")
+        + ". Treat a non-zero exit as a failed cron run and report the error; "
+        "otherwise remain silent."
     ),
 )
 
@@ -39,10 +47,10 @@ SELF_DREAM = CronSpec(
     name="lucid:self-dream",
     schedule="5 0 * * *",
     prompt=(
-        "Run Lucid self-Dreaming. Load the ocas-lucid skill, then execute "
-        "python3 ~/.hermes/profiles/$HERMES_PROFILE/skills/ocas-lucid/"
-        "scripts/lucid_self_dream.py --json. Treat a non-zero exit as a failed "
-        "cron run and report the error; otherwise remain silent."
+        "Run Lucid self-Dreaming. Load the ocas-lucid skill, then execute: "
+        + _script_command("lucid_self_dream.py")
+        + ". Treat a non-zero exit as a failed cron run and report the error; "
+        "otherwise remain silent."
     ),
 )
 
@@ -51,9 +59,9 @@ LEGACY_CURATE = CronSpec(
     schedule="12 10 * * *",
     prompt=(
         "Run the Lucid legacy curator compatibility cycle only. Load the "
-        "ocas-lucid skill and execute python3 ~/.hermes/profiles/"
-        "$HERMES_PROFILE/skills/ocas-lucid/scripts/lucid_curate.py --json. "
-        "Do not run User Dreaming or self-Dreaming from this job."
+        "ocas-lucid skill and execute: "
+        + _script_command("lucid_curate.py")
+        + ". Do not run User Dreaming or self-Dreaming from this job."
     ),
 )
 
@@ -157,7 +165,8 @@ def matches(job: dict[str, Any], spec: CronSpec) -> bool:
         and spec.skill in _skills(job)
         and str(job.get("prompt") or "") == spec.prompt
         and bool(job.get("enabled", True))
-        and str(job.get("state") or "scheduled") != "completed"
+        and str(job.get("state") or "scheduled") not in {"paused", "completed"}
+        and job.get("paused_at") in (None, "")
     )
 
 
