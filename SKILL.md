@@ -15,7 +15,7 @@ triggers:
 - lucid.update
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: "4.1.0"
+  version: "4.2.0"
   hermes:
     tags:
     - journaling
@@ -111,10 +111,11 @@ curator journal summary.
 - [ ] Create empty `ingestion_log.jsonl`, `decisions.jsonl`,
       `recirculation_queue.jsonl`, `removed_entries.jsonl`
 - [ ] Create `{agent_root}/commons/journals/ocas-lucid/`
-- [ ] Register `lucid:user-dream` and `lucid:self-dream` — **check before
-      registering** to avoid duplicate consolidation runs.
-- [ ] Register `lucid:curate` only if the deployment still has a consumer of
-      legacy curated-journal artifacts.
+- [ ] Run `python3 scripts/lucid_init.py --json`. It creates missing state,
+      idempotently registers `lucid:user-dream` and `lucid:self-dream`, and
+      migrates an existing `lucid:dream` job in place to `lucid:curate`.
+- [ ] Use `--no-legacy-curator` when the deployment no longer has any consumer
+      of curated-journal artifacts.
 - [ ] Log initialization as a DecisionRecord
 
 ## Error handling
@@ -157,7 +158,9 @@ Read `references/boundaries-and-interfaces.md` when deciding which component sho
 | Script | Usage | Exit codes |
 |--------|-------|-----------|
 | `scripts/lucid_user_dream.py` | `--principal`, `--since-seq`, `--limit`, `--json` | 0 clean run, 1 durable-write error |
-| `scripts/lucid_self_dream.py` | `--principal`, `--observation`, `--observations-dir`, `--json` | 0 completed |
+| `scripts/lucid_self_dream.py` | `--principal`, `--observation`, `--observations-dir`, `--json` | 0 completed/no-op |
+| `scripts/lucid_init.py` | initialize state + reconcile/migrate Lucid cron jobs | 0 reconciled, 1 mismatch/failure |
+| `scripts/lucid_status.py` | report Lucid cron and principal/domain run state | 0 completed |
 | `scripts/lucid_curate.py` | compatibility wrapper for the old journal cycle | follows legacy curator |
 | `scripts/lucid_dream_template.py` | legacy implementation behind `lucid.curate` | 0 completed/help, 2 bad usage or missing config |
 | `scripts/update.sh` | `--help`, `--dry-run`, `--force` | 0 updated, 2 bad usage, 3 dirty worktree (refused), 4 divergence/pull failure |
@@ -272,8 +275,8 @@ writes only its own curated journals, candidate payloads, and private data files
 Required:
 
 - `lucid:user-dream` — daily 02:20 local.
-- `lucid:self-dream` — daily after Autobio observation and before the
-  micro-distillation window.
+- `lucid:self-dream` — daily 00:05 local, after the late-evening Autobio
+  observation window. Re-running the same observation is a recorded no-op.
 
 Optional during migration:
 
