@@ -71,8 +71,17 @@ LEGACY_NAMES = {"lucid:dream"}
 class HermesCronCLI:
     """Small adapter around the host-owned Hermes cron CLI."""
 
-    def __init__(self, *, executable: str = "hermes", runner: Callable[..., Any] | None = None):
+    def __init__(
+        self,
+        *,
+        executable: str = "hermes",
+        hermes_home: str | os.PathLike[str] | None = None,
+        runner: Callable[..., Any] | None = None,
+    ):
         self.executable = executable
+        self.hermes_home = Path(
+            hermes_home or os.environ.get("HERMES_HOME") or "~/.hermes"
+        ).expanduser().resolve()
         self._runner = runner or subprocess.run
 
     def _run(self, *args: str) -> subprocess.CompletedProcess:
@@ -83,10 +92,8 @@ class HermesCronCLI:
             check=False,
         )
 
-    @staticmethod
-    def _jobs_path() -> Path:
-        home = Path(os.environ.get("HERMES_HOME") or "~/.hermes").expanduser()
-        return home / "cron" / "jobs.json"
+    def _jobs_path(self) -> Path:
+        return self.hermes_home / "cron" / "jobs.json"
 
     def list_jobs(self) -> list[dict[str, Any]]:
         """Read the host registry for identity/status only; never write it."""
