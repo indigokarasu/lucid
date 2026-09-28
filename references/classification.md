@@ -21,7 +21,7 @@ Each journal is scored by examining its **narrative text fields** (summary, desc
 
 | Score | Filing Action |
 |-------|---------------|
-| ≥ 5 | **file** — write to MemPalace drawers + KG |
+| ≥ 5 | **file** — write a curated Lucid journal artifact; attach a candidate only when principal ownership is explicit |
 | 3–4 | **recirculate** — add to recirculation queue for re-evaluation |
 | ≤ 2 | **skip** — no filing, cursor advances only |
 
@@ -31,7 +31,7 @@ Journals with **no narrative** AND **text length < 300 chars** receive `-3` (`pu
 
 ## Wing Assignment
 
-Maps skill → MemPalace wing (falls back to `root/<room>` if custom wings unavailable):
+Maps skill → curation category/topic. These are organizational labels only; they do not determine memory ownership:
 
 | Skill | Wing | Room (topic slug) |
 |-------|------|-------------------|
@@ -40,7 +40,6 @@ Maps skill → MemPalace wing (falls back to `root/<room>` if custom wings unava
 | ocas-scout, ocas-rally, ocas-sift, ocas-reach | research | research |
 | ocas-dispatch, ocas-haiku, ocas-weave, ocas-spot, ocas-vesper | operations | operations |
 | ocas-sands, ocas-voyage, ocas-look, ocas-taste | preferences | preferences |
-| ocas-elephas, ocas-corvus, corvus | knowledge | knowledge |
 | ocas-bower, ocas-expansion, ocas-bones | operations | operations |
 
 ## Skip Criteria (Auto-Skip Regardless of Score)
@@ -147,7 +146,7 @@ Apply keyword checks to **extracted narrative text only** (lowercased). Never co
 
 ## Edge Cases Handled
 
-- **Elephas deep consolidation journals**: Have `identities_merged`, `relates_created` → entity_density(+2). Often pure metrics otherwise → skip unless lessons/decisions present.
+- **Historical consolidation journals**: treat pure migration/metric records as low-signal unless they contain durable lessons or decisions. Historical retired-component journals remain evidence but are not active producers.
 - **Vesper briefings**: Have decisions sections + entity data → typically score 8+ (file).
 - **Scout/Sift expansion journals**: Often have entity data + blocker context (API limits) → score 5 (file).
 - **Weave upsert journals**: Entity data only → score 3 (recirculate) unless cross-skill issue present.
