@@ -48,6 +48,35 @@ Better approach: check `skill name` in path first, then apply filename patterns 
 
 ## Cursor Management
 
+### `today` must be bound before the curated writer (fixed 2026-09-27, keep fixed)
+
+`lucid_dream_template.py` referenced `today` inside the curated-entry writer
+but assigned it ~85 lines later, in the dream-journal block. Every curated
+write therefore raised `NameError`, and the block's `except` swallowed it into
+`mempalace_error: "curated_write_failed: ..."` — so a run reported
+`file_count: 82 / filed_count: 82` with **zero files on disk**, and no crash.
+
+**Why it went unnoticed**: the failure is loud in the decision record
+(`curated_write_failed`) but the counters were computed independently of it,
+and the run never exits non-zero. A nightly cron looks perfectly healthy.
+
+**How to apply**: after changing anything in the filing path, confirm
+`curated_entries_written` in `evidence.jsonl` equals the number of
+`curated-*.json` files actually on disk for that run id. Count the files, do
+not trust the counter.
+
+### `--dry-run` must not write curated files (fixed 2026-09-27, keep fixed)
+
+The curated-entry writer sat *outside* the `if not dry_run` guard that wraps the
+log appends, so a dry run created real files under
+`journals/ocas-lucid/YYYY-MM-DD/` that no decision, ingestion or evidence row
+referenced. A pre-flight dry run therefore manufactured a second copy of every
+journal it scored >=5, which Chronicle would ingest as a duplicate filing.
+
+**How to apply**: `--dry-run` must leave the journal tree byte-identical. After
+a dry run, count `curated-*.json` before and after; if it grew, the guard is
+missing.
+
 ### First run cursor placement
 The cursor should point to the **last file actually processed** (by the prioritized ordering), not the last file alphabetically. If you process interesting-first, the cursor should be the last interesting journal, not a scan file that was skipped.
 

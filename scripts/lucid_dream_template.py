@@ -383,6 +383,11 @@ def main(argv=None):
     total_available = len(all_files)
     all_files.sort(key=priority_key)
 
+    # Bound here, before the classification loop. The curated writer referenced
+    # `today` ~75 lines before it was assigned, so every curated write raised
+    # NameError into a swallowed except (fix 2026-09-27; see gotchas.md).
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+
     # Content-aware pre-screen. Priority sort alone is NOT enough: `mentor-light`
     # is priority 0 AND is_scan()==False, so it owns the front of the ordering
     # and can fill an entire batch. Those journals are pure metrics (no
@@ -486,32 +491,39 @@ def main(argv=None):
                 journal, rel, skill, score, signals, _nar, entities
             )
             try:
+                # `today` must be bound before this write (fix 2026-09-27), and
+                # --dry-run must write nothing (fix 2026-09-27). Both were live
+                # bugs; see references/gotchas.md for the failure signatures.
                 _safe = rel.replace("/", "_").replace(".json", "")
                 _cpath = LUCID_JOURNALS_DIR / today / f"curated-{run_id}-{_safe}.json"
-                os.makedirs(_cpath.parent, exist_ok=True)
-                with open(_cpath, "w") as _cf:
-                    json.dump({
-                        "journal_spec_version": "2.0",
-                        "run_id": run_id,
-                        "timestamp": timestamp,
-                        "type": "Observation",
-                        "source_journal": rel,
-                        "source_component": skill,
-                        "target_principal": source_principal(journal),
-                        "category": category,
-                        "topic": topic,
-                        "relevance_score": score,
-                        "signals": signals,
-                        "summary": _nar[:600],
-                        "narrative": _nar or "(no narrative field; classified on structured signals only)",
-                        "entities": entities,
-                        "entity_count": len(entities),
-                        "memory_candidate": candidate,
-                        "note": "Provider-independent curated evidence. Durable memory is decided by sanctioned Chronicle ingestion.",
-                    }, _cf, indent=2)
-                curated_entries.append(_cpath.name)
-                d["curated_written"] = True
-                d["candidate_eligible"] = candidate is not None
+                if dry_run:
+                    d["curated_written"] = False
+                    d["dry_run"] = True
+                else:
+                    os.makedirs(_cpath.parent, exist_ok=True)
+                    with open(_cpath, "w") as _cf:
+                        json.dump({
+                            "journal_spec_version": "2.0",
+                            "run_id": run_id,
+                            "timestamp": timestamp,
+                            "type": "Observation",
+                            "source_journal": rel,
+                            "source_component": skill,
+                            "target_principal": source_principal(journal),
+                            "category": category,
+                            "topic": topic,
+                            "relevance_score": score,
+                            "signals": signals,
+                            "summary": _nar[:600],
+                            "narrative": _nar or "(no narrative field; classified on structured signals only)",
+                            "entities": entities,
+                            "entity_count": len(entities),
+                            "memory_candidate": candidate,
+                            "note": "Provider-independent curated evidence. Durable memory is decided by sanctioned Chronicle ingestion.",
+                        }, _cf, indent=2)
+                    curated_entries.append(_cpath.name)
+                    d["curated_written"] = True
+                    d["candidate_eligible"] = candidate is not None
                 d["filed_via"] = "curated_journal_file"
             except Exception as _e:
                 d["curated_error"] = f"curated_write_failed: {_e}"[:200]
