@@ -1,4 +1,9 @@
 import unittest
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
 
 from dreaming.cron import LEGACY_CURATE, SELF_DREAM, USER_DREAM, reconcile
 
