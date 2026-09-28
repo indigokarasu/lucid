@@ -123,14 +123,14 @@ Even fallback defaults should use absolute paths or be expanded. This applies to
 
 ## Degraded Mode
 
-When MemPalace MCP is unavailable:
-- Skip `mempalace_add_drawer`, `mempalace_kg_add`, `mempalace_check_duplicate` calls
-- Log `degraded: mempalace` in evidence record
-- Set `mempalace_filed: false` and `mempalace_error` in decision records
-- Continue with all other writes (decisions, ingestion log, dream journal)
-- The run is still valuable — classification and routing decisions are persisted
+When Chronicle ingestion is unavailable, Lucid still writes its own curated
+journal artifacts. Chronicle ingestion is downstream and independently
+recoverable.
 
-### SQLite Direct-Access Fallback (when MCP tools unavailable)
+Lucid never falls back to direct database access. It does not open Chronicle's
+SQLite store and it does not depend on any retired memory-provider database.
+
+## SQLite Direct-Access Fallback (when MCP tools unavailable)
 
 When MemPalace MCP tools are not registered (common in cron/CLI environments), the KG and ChromaDB are accessible directly via SQLite:
 
@@ -170,7 +170,7 @@ d = {
     "timestamp": timestamp, "run_id": run_id, "filepath": str(fp),
     "relative_path": rel, "score": score, "classification": cls,
     "reasoning": "; ".join(signals) if signals else "no signals",
-    "signals": signals, "mempalace_filed": False, "mempalace_error": None,
+    "signals": signals, "curated_written": False, "candidate_eligible": False,
     "skill": skill, "wing": wing, "room": room,
     "entity_count": len(entities),      # NEW: helps diagnose scoring
     "narrative_len": len(narrative),    # NEW: catches extraction gaps
@@ -201,15 +201,12 @@ evidence["cursor_after"] = str(batch[-1].relative_to(SOURCE_JOURNALS_PATH))
 
 This applies to ALL dict values that might be Path objects — evidence, dream journal, ingestion log entries, and decision records.
 
-## Elephas Pipeline Interaction
+## Chronicle ingestion interaction
 
-When invoked as `elephas.ingest.journals then elephas.consolidate.immediate`, the expected flow is:
+Lucid runs independently of Chronicle ingestion:
 
-1. **Lucid dream cycle** runs first — scans all OCAS journals, classifies, writes dream journal
-2. **Elephas cron pipeline** runs second — scans the same journal directories for entity extraction, writes to Chronicle
-
-The two pipelines are independent but operate on the same input data. Key observations:
-- Elephas's `elephas_cron_pipeline.py` uses LadybugDB (`lb.configure("chronicle")`) — requires the LadybugDB service running on port 9192
-- Elephas writes its run journals to `<hermes-home>/commons/journals/ocas-elephas/YYYY-MM-DD/` — these are excluded from Lucid's scan path
-- JSON parse errors in source journals (especially `mentor-light-*` files) cause silent skips in elephas — see `references/elephas-pipeline-json-errors.md`
-- The elephas pipeline's DEBUG stdout output is expected and harmless in cron context
+1. Lucid reads immutable source journals.
+2. Lucid writes curated journal artifacts.
+3. Curated artifacts with an explicit principal may carry a memory candidate.
+4. Sanctioned Chronicle ingestion decides whether to persist that candidate.
+5. Source journals and curated journals remain immutable evidence regardless of the ingestion outcome.
