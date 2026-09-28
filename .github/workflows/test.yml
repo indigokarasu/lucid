@@ -21,3 +21,5 @@ jobs:
         run: bash -n scripts/update.sh
       - name: Smoke tests
         run: python3 tests/test_smoke.py
+      - name: Dreaming kernel tests
+        run: python3 tests/test_dreaming.py
