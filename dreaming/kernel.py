@@ -82,10 +82,12 @@ class JsonNamespaceStore:
         *,
         profile_id: str | None = None,
         principal_id: str | None = None,
+        subject_id: str | None = None,
     ):
         self.root = Path(root)
         self.profile_id = profile_id
         self.principal_id = principal_id
+        self.subject_id = subject_id
 
     def _path(self, domain: DreamDomain) -> Path:
         return self.root / f"{domain.value}.json"
@@ -97,6 +99,7 @@ class JsonNamespaceStore:
                 "domain": domain.value,
                 "profile_id": self.profile_id,
                 "principal_id": self.principal_id,
+                "subject_id": self.subject_id,
                 "candidates": {},
                 "active": {},
                 "runs": [],
@@ -108,8 +111,11 @@ class JsonNamespaceStore:
             raise ValueError("dream state profile mismatch")
         if self.principal_id is not None and value.get("principal_id") not in (None, self.principal_id):
             raise ValueError("dream state principal mismatch")
+        if self.subject_id is not None and value.get("subject_id") not in (None, self.subject_id):
+            raise ValueError("dream state subject mismatch")
         value.setdefault("profile_id", self.profile_id)
         value.setdefault("principal_id", self.principal_id)
+        value.setdefault("subject_id", self.subject_id)
         value.setdefault("candidates", {})
         value.setdefault("active", {})
         value.setdefault("runs", [])
@@ -122,8 +128,11 @@ class JsonNamespaceStore:
             raise ValueError("refusing to write cross-profile dream state")
         if self.principal_id is not None and state.get("principal_id") not in (None, self.principal_id):
             raise ValueError("refusing to write cross-principal dream state")
+        if self.subject_id is not None and state.get("subject_id") not in (None, self.subject_id):
+            raise ValueError("refusing to write cross-subject dream state")
         state["profile_id"] = self.profile_id
         state["principal_id"] = self.principal_id
+        state["subject_id"] = self.subject_id
         self.root.mkdir(parents=True, exist_ok=True)
         path = self._path(domain)
         tmp = path.with_suffix(".json.tmp")
