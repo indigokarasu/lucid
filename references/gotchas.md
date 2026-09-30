@@ -147,11 +147,51 @@ Some skills write journals directly in the skill directory (e.g., `ocas-custodia
 
 ## Data Integrity
 
+### The commons symlink silently disables dedup (fixed 2026-09-29, keep fixed)
+`~/.hermes/commons` is a **symlink** to `~/.hermes/profiles/<agent>/commons`. The
+template built journal paths with `Path(...).resolve()`, which returns the REAL
+path, while every historical row in `ingestion_log.jsonl` / `decisions.jsonl`
+stores the SYMLINK spelling:
+
+```
+discovered: /root/.hermes/profiles/indigo/commons/journals/ocas-vesper/x.json
+logged:     /root/.hermes/commons/journals/ocas-vesper/x.json
+```
+
+Plain string equality never matches, so **both** the processed-set dedup and the
+duplicate guard were inert: 5,372 processed journals were re-offered as
+unprocessed, and 8 journals curated 40 minutes earlier were selected to be filed
+again.
+
+**Signature**: a run reports `total_journals` near the *total* file count rather
+than `total - processed`, and `filed` is implausibly high — the same source
+paths reappear across consecutive runs.
+
+**Do not hardcode the alias root.** `HERMES_HOME` may already BE the profile dir
+(`/root/.hermes/profiles/indigo`), in which case `expanduser() == resolve()` and
+the `profiles/<agent>` segment is absent from it entirely. Derive the canonical
+root structurally: walk `HERMES_HOME.parents` for a `commons` symlink that
+resolves to this profile's own `commons`. Every comparison against a logged
+path goes through `normalize()`.
+
+**Defence in depth**: the File phase now consults `load_filed_sources()` and
+records `skip` / `already_filed` rather than writing a second curated artifact.
+Both fixes are required — the alias fix restores resumption, the guard makes a
+repeat filing impossible even if resumption breaks again.
+
+**Retroactive damage**: as of 2026-09-29 this had produced **97 redundant curated
+artifacts** across 95 sources (215 artifacts, 118 unique sources), first
+appearing 2026-09-25. Repair is a separate pass — the artifacts are evidence, and
+deleting them is a deliberate call, not a side effect of a dream cycle. Check
+`curated-*.json` per `source_journal` before assuming a filing is unique.
+
 ### Decisions file grows fast
 Each processed journal writes one decision record. With 374 journals and ~300 scans = ~374 decisions per full pass. Implement log rotation or compaction after 90 days.
 
 ### Ingestion log cursor tracking
 The ingestion log tracks `run_id` + `filepath`. For cursor resumption, check which filepaths appear in the log and skip them. Don't rely solely on the `cursor` field — it's a hint, but the ingestion log is the source of truth.
+
+**Normalize paths before comparing.** The log and the filesystem may spell the same journal differently (see the commons-symlink entry above). Membership tests that compare raw strings silently return False.
 
 ## Cron Environment
 

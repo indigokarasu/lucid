@@ -99,7 +99,9 @@ curator journal summary.
       score, assign taxonomy room; apply safety gates before filing
 - [ ] **File** — check `decisions.jsonl` for an existing `file` decision on the
       source path first; if already filed, record `skip`/`already_filed` rather
-      than writing a duplicate
+      than writing a duplicate. **Normalize every logged path before comparing** —
+      the `commons` symlink means the log and the filesystem spell the same
+      journal differently, and a raw comparison returns False.
 - [ ] **Close out** — append decisions + ingestion log + recirculation entries;
       write the dream journal; append evidence; advance `config.json` cursor,
       streak, and counters

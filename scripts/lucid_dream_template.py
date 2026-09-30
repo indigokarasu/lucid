@@ -41,6 +41,12 @@ from pathlib import Path
 DEFAULT_BATCH_SIZE = 200
 
 # === PATHS (pathlib) ===
+# `commons` is a SYMLINK, so two spellings of the same journals tree exist and
+# both are real: the symlink path (`~/.hermes/commons/journals`, what history
+# stores) and the resolved real path (`~/.hermes/profiles/<agent>/commons/...`).
+# `HERMES_HOME` cannot be used to tell them apart: it may already BE the profile
+# dir, making expanduser() == resolve(). `_alias_root()` below derives the
+# canonical spelling structurally instead.
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser().resolve()
 DATA_DIR = HERMES_HOME / "commons" / "data" / "ocas-lucid"
 JOURNALS_DIR = HERMES_HOME / "commons" / "journals"
@@ -50,6 +56,55 @@ INGESTION_LOG_PATH = DATA_DIR / "ingestion_log.jsonl"
 DECISIONS_PATH = DATA_DIR / "decisions.jsonl"
 RECIRCULATION_PATH = DATA_DIR / "recirculation_queue.jsonl"
 EVIDENCE_PATH = DATA_DIR / "evidence.jsonl"
+
+
+def _alias_root():
+    """Return the canonical (symlink-spelled) root for the commons tree.
+
+    Detected structurally, not hardcoded: walk HERMES_HOME's ancestors looking
+    for a `commons` symlink that resolves to this profile's own `commons`
+    directory. That ancestor is the canonical root, because that is the spelling
+    the config and every historical log row use.
+
+    `HERMES_HOME` alone cannot identify the alias -- it may already BE the
+    profile dir, so expanduser() == resolve() and the `profiles/<agent>` segment
+    never appears in it. Returns None when no alias exists, making normalize() a
+    no-op rather than a wrong rewrite.
+    """
+    target = (HERMES_HOME / "commons").resolve()
+    for parent in HERMES_HOME.parents:
+        cand = parent / "commons"
+        try:
+            if cand.is_symlink() and cand.resolve() == target:
+                return str(parent)
+        except OSError:
+            continue
+    return None
+
+
+_ALIAS_ROOT = _alias_root()
+
+
+def normalize(fp):
+    """Collapse the resolved/symlink path alias to ONE canonical spelling.
+
+    Path.resolve() returns the real path, so journals are discovered as
+    `~/.hermes/profiles/<agent>/commons/journals/...` while every historical
+    log row stores the `~/.hermes/commons/journals/...` symlink spelling.
+    Comparing the two as plain strings never matches, which silently disables
+    BOTH cursor resumption and duplicate detection -- the processed set looked
+    empty and every run re-filed its predecessor's work.
+
+    Every comparison against a logged path must go through this function.
+    It is idempotent, so applying it to an already-normalized path is a no-op.
+    """
+    if not _ALIAS_ROOT:
+        return str(fp)
+    s = str(fp)
+    prefix = str(HERMES_HOME) + "/"
+    if s.startswith(prefix):
+        return _ALIAS_ROOT + "/" + s[len(prefix):]
+    return s
 
 # === SCAN CLASSIFICATION (with skill-level exceptions) ===
 SCAN_PATTERNS = [
@@ -263,12 +318,20 @@ def get_category_topic(skill):
         'ocas-taste': ('preferences', 'preferences'),
         'ocas-bones': ('operations', 'operations'),
         'ocas-sands': ('preferences', 'preferences'),
+        'ocas-scout': ('research', 'research'),
+        'ocas-sift': ('research', 'research'),
+        'ocas-rally': ('research', 'research'),
+        'ocas-reach': ('research', 'research'),
     }
     return mapping.get(skill, ('root', 'operations'))
 
 # === FILE DISCOVERY ===
 def gather_unprocessed(processed):
-    """Gather all unprocessed journal files, handling both date subdirs and root-level files."""
+    """Gather all unprocessed journal files, handling both date subdirs and root-level files.
+
+    Every membership test is normalized, so the symlink/resolved alias cannot
+    make an already-processed journal look new.
+    """
     all_files = []
     for skill_dir in sorted(JOURNALS_DIR.iterdir()):
         if not skill_dir.is_dir() or skill_dir.name.startswith("."):
@@ -280,16 +343,39 @@ def gather_unprocessed(processed):
                 # Handle files directly in skill dir (e.g., ocas-custodian/esc-run-*)
                 if date_dir.suffix == ".json" and date_dir.name != "task-list.json":
                     fp_str = str(date_dir)
-                    if fp_str not in processed and "ocas-lucid" not in fp_str:
+                    if normalize(fp_str) not in processed and "ocas-lucid" not in fp_str:
                         all_files.append(date_dir)
                 continue
             for f in sorted(date_dir.glob("*.json")):
                 if f.name == "task-list.json":
                     continue
                 fp_str = str(f)
-                if fp_str not in processed and "ocas-lucid" not in fp_str:
+                if normalize(fp_str) not in processed and "ocas-lucid" not in fp_str:
                     all_files.append(f)
     return all_files
+
+
+def load_filed_sources():
+    """Source paths that already carry a `file` decision in decisions.jsonl.
+
+    The legacy-curator checklist requires this check before writing a curated
+    artifact: a source that has already been filed is recorded
+    skip/already_filed, never written a second time. Without it, any resumption
+    failure (see normalize()) makes every run duplicate its predecessor.
+    """
+    filed = set()
+    if not DECISIONS_PATH.exists():
+        return filed
+    for line in DECISIONS_PATH.read_text().strip().split("\n"):
+        if not line.strip():
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if d.get("classification") == "file" and d.get("filepath"):
+            filed.add(normalize(d["filepath"]))
+    return filed
 
 # === PRINCIPAL / CANDIDATE HELPERS ===
 def source_principal(journal):
@@ -375,9 +461,12 @@ def main(argv=None):
                 continue
             try:
                 entry = json.loads(line)
-                processed.add(entry.get("file") or entry.get("filepath") or entry.get("journal_file", ""))
+                processed.add(normalize(entry.get("file") or entry.get("filepath")
+                                        or entry.get("journal_file", "")))
             except json.JSONDecodeError:
                 pass
+
+    filed_sources = load_filed_sources()
 
     # Gather & sort
     all_files = gather_unprocessed(processed)
@@ -452,7 +541,9 @@ def main(argv=None):
     # Write records
     decisions, ingestions, recircs = [], [], []
     filed = skipped = recirculated = 0
+    already_filed = 0
     file_details = []
+    already_filed_details = []
     curated_entries = []
 
     for fp, journal, score, signals, cls, entities, narrative_len in results:
@@ -476,58 +567,71 @@ def main(argv=None):
                "classification": cls, "score": score}
 
         if cls == "file":
-            filed += 1
-            category, topic = get_category_topic(skill)
-            d["category"] = category
-            d["topic"] = topic
-            file_details.append({
-                "path": rel, "score": score, "signals": signals,
-                "skill": skill, "category": category, "topic": topic,
-                "entities": entities, "narrative_len": narrative_len
-            })
-            # The decision ledger stores metadata only; the curated journal preserves
-            # the reviewable content and optional principal-scoped candidate.
-            _nar = extract_narrative(journal, str(fp)) if journal is not None else ""
-            candidate = build_memory_candidate(
-                journal, rel, skill, score, signals, _nar, entities
-            )
-            try:
-                # `today` must be bound before this write (fix 2026-09-27), and
-                # --dry-run must write nothing (fix 2026-09-27). Both were live
-                # bugs; see references/gotchas.md for the failure signatures.
-                _safe = rel.replace("/", "_").replace(".json", "")
-                _cpath = LUCID_JOURNALS_DIR / today / f"curated-{run_id}-{_safe}.json"
-                if dry_run:
-                    d["curated_written"] = False
-                    d["dry_run"] = True
-                else:
-                    os.makedirs(_cpath.parent, exist_ok=True)
-                    with open(_cpath, "w") as _cf:
-                        json.dump({
-                            "journal_spec_version": "2.0",
-                            "run_id": run_id,
-                            "timestamp": timestamp,
-                            "type": "Observation",
-                            "source_journal": rel,
-                            "source_component": skill,
-                            "target_principal": source_principal(journal),
-                            "category": category,
-                            "topic": topic,
-                            "relevance_score": score,
-                            "signals": signals,
-                            "summary": _nar[:600],
-                            "narrative": _nar or "(no narrative field; classified on structured signals only)",
-                            "entities": entities,
-                            "entity_count": len(entities),
-                            "memory_candidate": candidate,
-                            "note": "Provider-independent curated evidence. Durable memory is decided by sanctioned Chronicle ingestion.",
-                        }, _cf, indent=2)
-                    curated_entries.append(_cpath.name)
-                    d["curated_written"] = True
-                    d["candidate_eligible"] = candidate is not None
-                d["filed_via"] = "curated_journal_file"
-            except Exception as _e:
-                d["curated_error"] = f"curated_write_failed: {_e}"[:200]
+            # DUPLICATE GUARD: a source that already carries a `file` decision is
+            # recorded skip/already_filed, never written a second time.
+            if normalize(str(fp)) in filed_sources:
+                d["classification"] = "skip"
+                d["reasoning"] = "already_filed: " + "; ".join(signals)
+                d["skip_reason"] = "already_filed"
+                ing["classification"] = "skip"
+                already_filed += 1
+                already_filed_details.append({
+                    "path": rel, "score": score, "skill": skill,
+                    "would_have_been": "file",
+                })
+            else:
+                filed += 1
+                category, topic = get_category_topic(skill)
+                d["category"] = category
+                d["topic"] = topic
+                file_details.append({
+                    "path": rel, "score": score, "signals": signals,
+                    "skill": skill, "category": category, "topic": topic,
+                    "entities": entities, "narrative_len": narrative_len
+                })
+                # The decision ledger stores metadata only; the curated journal preserves
+                # the reviewable content and optional principal-scoped candidate.
+                _nar = extract_narrative(journal, str(fp)) if journal is not None else ""
+                candidate = build_memory_candidate(
+                    journal, rel, skill, score, signals, _nar, entities
+                )
+                try:
+                    # `today` must be bound before this write (fix 2026-09-27), and
+                    # --dry-run must write nothing (fix 2026-09-27). Both were live
+                    # bugs; see references/gotchas.md for the failure signatures.
+                    _safe = rel.replace("/", "_").replace(".json", "")
+                    _cpath = LUCID_JOURNALS_DIR / today / f"curated-{run_id}-{_safe}.json"
+                    if dry_run:
+                        d["curated_written"] = False
+                        d["dry_run"] = True
+                    else:
+                        os.makedirs(_cpath.parent, exist_ok=True)
+                        with open(_cpath, "w") as _cf:
+                            json.dump({
+                                "journal_spec_version": "2.0",
+                                "run_id": run_id,
+                                "timestamp": timestamp,
+                                "type": "Observation",
+                                "source_journal": rel,
+                                "source_component": skill,
+                                "target_principal": source_principal(journal),
+                                "category": category,
+                                "topic": topic,
+                                "relevance_score": score,
+                                "signals": signals,
+                                "summary": _nar[:600],
+                                "narrative": _nar or "(no narrative field; classified on structured signals only)",
+                                "entities": entities,
+                                "entity_count": len(entities),
+                                "memory_candidate": candidate,
+                                "note": "Provider-independent curated evidence. Durable memory is decided by sanctioned Chronicle ingestion.",
+                            }, _cf, indent=2)
+                        curated_entries.append(_cpath.name)
+                        d["curated_written"] = True
+                        d["candidate_eligible"] = candidate is not None
+                    d["filed_via"] = "curated_journal_file"
+                except Exception as _e:
+                    d["curated_error"] = f"curated_write_failed: {_e}"[:200]
         elif cls == "recirculate":
             recirculated += 1
             recircs.append({
@@ -565,6 +669,8 @@ def main(argv=None):
         "recirculate_count": recirculated, "skip_count": skipped,
         "filed_count": filed_count,
         "curated_entries_written": len(curated_entries),
+        "already_filed_skipped": already_filed,
+        "processed_set_size": len(processed),
         "degraded": None,
         "empty_journals_screened_from_selection": empty_screened,
         "not_activity_reason": None
@@ -584,13 +690,16 @@ def main(argv=None):
             f"Dream {run_id}: {len(results)} journals from {total_available} available. "
             f"Filed {filed} (curated entries written: {len(curated_entries)}), "
             f"recirculated {recirculated}, skipped {skipped}. "
+            f"Already-filed sources suppressed: {already_filed}. "
             f"Empty journals screened from selection: {empty_screened}."
         ),
         "scan_count": len(results), "file_count": filed,
         "recirculate_count": recirculated, "skip_count": skipped,
+        "already_filed_count": already_filed,
         "filed_count": filed_count,
         "curated_entries_written": curated_entries,
                 "total_journals": total_available, "file_details": file_details,
+        "already_filed_details": already_filed_details,
         "recirculate_details": [], "skip_details": [],
         "re_emergence_events": [], "signal_emissions": [],
         "not_activity_reason": "dry_run" if dry_run else None
@@ -622,6 +731,7 @@ def main(argv=None):
     summary = {
         "run_id": run_id, "processed": len(results), "available": total_available,
         "filed": filed, "recirculated": recirculated, "skipped": skipped,
+        "already_filed_skipped": already_filed,
         "curated_written": len(curated_entries), "cursor": config.get("cursor_file"),
         "streak": config.get("streak"), "dry_run": dry_run,
     }
@@ -629,13 +739,17 @@ def main(argv=None):
         print(json.dumps(summary, indent=2))
     else:
         prefix = "[DRY RUN] " if dry_run else ""
-        print(f"{prefix}Dream {run_id}: {len(results)} processed ({filed} file, {recirculated} recirc, {skipped} skip) from {total_available} available")
+        print(f"{prefix}Dream {run_id}: {len(results)} processed ({filed} file, {recirculated} recirc, {skipped} skip, {already_filed} already-filed-suppressed) from {total_available} available")
         print(f"Cursor: {config.get('cursor_file', 'N/A')}")
         print(f"Streak: {config['streak']}")
         if file_details:
             print("\nFiled journals:")
             for fd in file_details:
                 print(f"  [{fd['score']}] {fd['path']} -> {fd['category']}/{fd['topic']}")
+        if already_filed_details:
+            print("\nSuppressed as already filed:")
+            for af in already_filed_details:
+                print(f"  [{af['score']}] {af['path']}")
     return 0
 
 if __name__ == "__main__":

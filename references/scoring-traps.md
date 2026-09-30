@@ -15,6 +15,13 @@ record `skip` with an `already_filed` note instead of writing a duplicate.
 rollback can make the log and the cursor disagree. The ledger check is the only
 cheap way to notice.
 
+**Both the log lookup AND the ledger lookup must normalize paths.** A raw
+substring grep is how this check silently passes: the log stores the symlink
+spelling of the path while the discovered path is the resolved real one, so the
+grep finds nothing and the duplicate is written anyway. Route every comparison
+through `normalize()` and compare sets, not substrings — see the commons-symlink
+entry in `references/gotchas.md`.
+
 ## Run id and folder come from the wall clock
 
 Generate `run_id` as `lucid-<UTC now>` at write time and place the journal in
