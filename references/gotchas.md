@@ -167,12 +167,38 @@ again.
 than `total - processed`, and `filed` is implausibly high — the same source
 paths reappear across consecutive runs.
 
-**Do not hardcode the alias root.** `HERMES_HOME` may already BE the profile dir
-(`/root/.hermes/profiles/indigo`), in which case `expanduser() == resolve()` and
-the `profiles/<agent>` segment is absent from it entirely. Derive the canonical
-root structurally: walk `HERMES_HOME.parents` for a `commons` symlink that
-resolves to this profile's own `commons`. Every comparison against a logged
-path goes through `normalize()`.
+**Do not hardcode the alias root, and do not assume one log spelling.**
+`HERMES_HOME` may already BE the profile dir (`/root/.hermes/profiles/indigo`),
+in which case `expanduser() == resolve()` and the `profiles/<agent>` segment is
+absent from it entirely. Derive the canonical root structurally and reduce BOTH
+spellings onto the RESOLVED `(HERMES_HOME/"commons").resolve()`. Every
+comparison against a logged path goes through `normalize()`.
+
+**Second failure mode (2026-10-01): wrong search location AND backwards
+canonical.** `_alias_root()` walked `HERMES_HOME.parents` looking for a
+`commons` symlink, but the symlink is INSIDE `HERMES_HOME`
+(`~/.hermes/commons`), not above it — so it returned `None` and `normalize()`
+was a silent no-op again, the same failure as before. And even once located,
+the two spellings cannot be collapsed onto the *symlink* path by convention:
+`decisions.jsonl` mixes BOTH spellings (227 `file` decisions reduce to 123
+unique sources only after normalization). Only the resolved target is
+unambiguous.
+
+**Test the guard directly; a run summary is not evidence.** Import the module
+and assert `normalize(symlink_spelling) in load_filed_sources()` and
+`normalize(resolved_spelling) in load_filed_sources()` for a source you know was
+filed. The 2026-10-01 run reported `filed: 7 / already_filed_skipped: 0` while
+3 of those 7 were re-filings of the previous run's artifacts — counters
+computed independently of the guard, exactly as with the `today`/curated-write
+bug above.
+
+**Detecting duplicate damage cheaply:** group every
+`journals/ocas-lucid/*/curated-*.json` by its `source_journal` and list sources
+with more than one artifact. As of 2026-10-01 that is 97 sources / 224
+artifacts. Note that `rm` of curated artifacts is BLOCKED in cron mode by the
+mass-deletion guard, so repair is an interactive/approved pass — and per this
+skill's own rule the artifacts are evidence, making removal a deliberate call
+rather than a dream-cycle side effect.
 
 **Defence in depth**: the File phase now consults `load_filed_sources()` and
 records `skip` / `already_filed` rather than writing a second curated artifact.

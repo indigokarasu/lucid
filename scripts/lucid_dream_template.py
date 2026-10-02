@@ -72,6 +72,16 @@ def _alias_root():
     no-op rather than a wrong rewrite.
     """
     target = (HERMES_HOME / "commons").resolve()
+    # Primary case: the symlink is INSIDE HERMES_HOME (~/.hermes/commons ->
+    # ~/.hermes/profiles/<agent>/commons). Only then is HERMES_HOME itself the
+    # canonical root.
+    own = HERMES_HOME / "commons"
+    try:
+        if own.is_symlink() and own.resolve() == target:
+            return str(HERMES_HOME)
+    except OSError:
+        pass
+    # Fallback: an ancestor also exposes a `commons` symlink to the same target.
     for parent in HERMES_HOME.parents:
         cand = parent / "commons"
         try:
@@ -85,25 +95,45 @@ def _alias_root():
 _ALIAS_ROOT = _alias_root()
 
 
+def _canonical_root():
+    """The single spelling every path comparison is reduced to.
+
+    That is the RESOLVED commons directory, whichever spelling it was
+    reached through. Both `~/.hermes/commons/journals/x` (symlink) and
+    `~/.hermes/profiles/<agent>/commons/journals/x` (real) are the same file,
+    so both must collapse onto this one. The historical rows in
+    decisions.jsonl / ingestion_log.jsonl are NOT uniform -- they contain both
+    spellings -- so neither can be treated as canonical by convention. Only
+    the resolved target is.
+    """
+    try:
+        return str((HERMES_HOME / "commons").resolve())
+    except OSError:
+        return None
+
+
+_CANON_ROOT = _canonical_root()
+
+
 def normalize(fp):
     """Collapse the resolved/symlink path alias to ONE canonical spelling.
 
-    Path.resolve() returns the real path, so journals are discovered as
-    `~/.hermes/profiles/<agent>/commons/journals/...` while every historical
-    log row stores the `~/.hermes/commons/journals/...` symlink spelling.
-    Comparing the two as plain strings never matches, which silently disables
-    BOTH cursor resumption and duplicate detection -- the processed set looked
-    empty and every run re-filed its predecessor's work.
+    `~/.hermes/commons` is a symlink into `~/.hermes/profiles/<agent>/commons`.
+    Journals are reachable under two absolute spellings, and historical log
+    rows mix both. Plain string equality between them silently disables BOTH
+    cursor resumption and duplicate detection -- the processed set looks empty
+    and every run re-files its predecessor's work. This is not hypothetical:
+    it produced 3 duplicate curated artifacts on the 2026-10-01 run.
 
     Every comparison against a logged path must go through this function.
     It is idempotent, so applying it to an already-normalized path is a no-op.
     """
-    if not _ALIAS_ROOT:
+    if not _CANON_ROOT:
         return str(fp)
     s = str(fp)
-    prefix = str(HERMES_HOME) + "/"
-    if s.startswith(prefix):
-        return _ALIAS_ROOT + "/" + s[len(prefix):]
+    for root in (str(HERMES_HOME), _ALIAS_ROOT):
+        if root and s.startswith(root + "/commons/"):
+            return _CANON_ROOT + s[len(root) + len("/commons"):]
     return s
 
 # === SCAN CLASSIFICATION (with skill-level exceptions) ===
