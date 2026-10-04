@@ -33,10 +33,13 @@ def parser() -> argparse.ArgumentParser:
 
 def latest_observation(directory: str) -> Path:
     root = Path(directory).expanduser().resolve()
-    candidates = sorted(p for p in root.glob("*.md") if p.is_file())
+    candidates = [
+        p for p in root.glob("*.md")
+        if p.is_file() and not p.name.startswith("dream-pipeline-")
+    ]
     if not candidates:
         raise FileNotFoundError(f"no Autobio observations found in {root}")
-    return candidates[-1]
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 def main(argv=None) -> int:
