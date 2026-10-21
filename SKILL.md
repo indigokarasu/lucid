@@ -2,7 +2,7 @@
 name: ocas-lucid
 license: MIT
 description: 'Canonical OCAS Dreaming implementation. Runs principal-scoped User Dreaming from Chronicle evidence and agent self-Dreaming from Autobio observations using one shared, domain-isolated kernel. User Dreaming writes accepted derivations through Chronicle; self-Dreaming stages evidence for Autobio/SOUL. The legacy journal curator remains available as lucid.curate only.'
-source: https://github.com/<agent-handle>/lucid
+source: https://github.com/indigokarasu/lucid
 includes:
 - references/**
 - scripts/**
