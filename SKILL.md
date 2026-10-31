@@ -1,6 +1,6 @@
 ---
 name: ocas-lucid
-description: 'Nightly journal curator. Batch-processes OCAS skill journals via relevance classification and writes curated content to journal files for the configured memory provider to ingest. Use when running scheduled nightly curation at 3am, manually invoking lucid.dream, or checking lucid.status. NOT for real-time memory filing, skill evaluation, behavioral detection, or entity resolution.'
+description: 'Curates OCAS skill journals nightly. Classifies journal entries by relevance and writes curated content to journal files for the memory provider to ingest. Triggers on nightly journal curation, skill journal batch processing, and lucid.dream invocation. NOT for real-time memory filing, skill evaluation, behavioral detection, or entity resolution.'
 license: MIT
 source: https://github.com/indigokarasu/lucid
 metadata:
@@ -95,6 +95,12 @@ Thresholds: **≥5** write, **3–4** skip and recirculate, **≤2** skip.
 The memory provider picks these up on its own schedule. Lucid's job ends when
 the journal is written.
 
+### Input / Output Examples
+
+**Input:** journal files in `~/.hermes/commons/journals/` named `<skill>/<YYYYMMDDTHHMMSSZ>.json`, each containing narrative text fields and a cursor file at `~/.hermes/commons/data/ocas-lucid/config.json` recording the last-processed filename.
+
+**Output:** curated entries written to `~/.hermes/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json`, with a `DecisionRecord` appended to `decisions.jsonl` and the cursor advanced in `ingestion_log.jsonl`.
+
 ## Gotchas
 
 ### Payload keys are not narrative
@@ -134,4 +140,6 @@ filing that did not happen. See `infrastructure/degraded-mode-execution`.
 
 ## Support Files
 
-- `references/self-update-lucid.md` — Self-Update Procedure for Lucid
+| File | Purpose | When to read |
+|------|---------|--------------|
+| `references/self-update-lucid.md` | Self-Update Procedure for Lucid | Before updating the skill repository or reloading configuration |
