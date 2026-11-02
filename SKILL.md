@@ -5,7 +5,7 @@ license: MIT
 source: https://github.com/indigokarasu/lucid
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 3.0.1
+  version: 3.0.2
   hermes:
     tags: [journal, curation, nightly, OCAS-core]
     category: creative
@@ -59,33 +59,39 @@ is last because it is the only step with side effects.
 ### Orient
 - Read `~/.hermes/commons/data/ocas-lucid/config.json`
 - Check the cursor — the last-processed journal filename
-- Hibernation: if no new journals for `hibernation_days` (default 7), skip with zero IO
+- Hibernation: if no new journals for `hibernation_days` (default 7), skip with zero IO — 7 days avoids wasting cycles on a quiet system while still catching up within a week of inactivity
 
 ### Gather
 - Scan `~/.hermes/commons/journals/` for skill journal `.json` files
-- Exclude Lucid's own directory (config: `exclude_self: true`)
+- Exclude Lucid's own directory (config: `exclude_self: true`) — prevents recursive self-curation and infinite loops
 - Keep journals whose filename timestamp is greater than the cursor
-- Cap at `catchup_cap` (default 40)
+- Cap at `catchup_cap` (default 40) — limits a single run to a manageable batch so one slow cycle doesn't block the agent
 
 ### Classify
 Extract text from narrative fields only — never from payload dict keys. A key
 named `lessons_extracted` is not a lesson.
 
-Apply scoring signals additively:
+Apply scoring signals additively. Each weight reflects how strongly the signal
+indicates information worth persisting across sessions — corrections and decisions
+outrank observations because they change future behavior, while routine metrics
+and health checks are actively penalized to prevent noise accumulation.
 
-| Signal | Score |
-|---|---|
-| Decision keywords (`decided`, `confirmed`, `agreed`, `resolved`, `committed`, `approved`, `rejected`) | +3 |
-| Entity density (3+ named entities in narrative text) | +2 |
-| Correction or lesson (narrative fields only) | +4 |
-| User-directed action | +3 |
-| Emotional signal | +2 |
-| Cross-skill reference | +2 |
-| Relationship signal (person ↔ person/project/org) | +3 |
-| Pure metrics | −3 |
-| Routine health check (ocas-custodian) | −4 |
+| Signal | Score | Why |
+|---|---|---|
+| Decision keywords (`decided`, `confirmed`, `agreed`, `resolved`, `committed`, `approved`, `rejected`) | +3 | Decisions are commitments that constrain future choices; losing them causes repeated deliberation |
+| Entity density (3+ named entities in narrative text) | +2 | Dense entity references indicate a substantive interaction, not a trivial exchange |
+| Correction or lesson (narrative fields only) | +4 | Corrections are the highest-value signal — they prevent repeated mistakes and directly improve future behavior |
+| User-directed action | +3 | Actions the user explicitly requested are outcomes they expect to be remembered |
+| Emotional signal | +2 | Emotional weight correlates with importance and aids later retrieval |
+| Cross-skill reference | +2 | Links between skills indicate shared context that benefits from unified memory |
+| Relationship signal (person ↔ person/project/org) | +3 | Relationship changes are durable facts with high reuse value |
+| Pure metrics | −3 | Raw numbers without narrative context are replaceable by re-querying the source |
+| Routine health check (ocas-custodian) | −4 | Health checks are repetitive and low-information; penalizing them prevents journal bloat |
 
 Thresholds: **≥5** write, **3–4** skip and recirculate, **≤2** skip.
+- **≥5 write**: A single strong signal (correction +4 plus any +1) or two medium signals clears the bar — only entries with genuine informational value are written.
+- **3–4 skip and recirculate**: Borderline entries are not discarded; they re-enter the next cycle where additional context may push them over the threshold.
+- **≤2 skip**: Entries below this have no actionable content; writing them wastes storage and dilutes retrieval quality.
 
 ### Write
 - Write the curated entries into `~/.hermes/commons/journals/ocas-lucid/YYYY-MM-DD/{run_id}.json`
@@ -143,3 +149,7 @@ filing that did not happen. See `infrastructure/degraded-mode-execution`.
 | File | Purpose | When to read |
 |------|---------|--------------|
 | `references/self-update-lucid.md` | Self-Update Procedure for Lucid | Before updating the skill repository or reloading configuration |
+| `CHANGELOG.md` | Version history and release notes | When checking what changed between versions or verifying a fix was shipped |
+| `config.json` | Runtime configuration (cursor, hibernation, thresholds) | When debugging cursor state or adjusting hibernation/catchup parameters |
+| `data/activity_model.jsonl` | Historical activity model data | When analyzing filing patterns or tuning scoring weights |
+| `infrastructure/degraded-mode-execution` (external skill) | Degraded-mode execution protocol | When a pipeline step cannot complete and the run must degrade gracefully |
